@@ -152,7 +152,8 @@ def distance_to_false(mask: np.ndarray, limit: int = 15) -> np.ndarray:
 
 def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
           min_opening_area: float = 0.35, max_opening_area: float = 14.0,
-          ground_z: float | None = None, interior_depth: int = 3) -> TileLattice:
+          ground_z: float | None = None, interior_depth: int = 3,
+          extend_to_ground: bool = False, max_extension: float = 4.0) -> TileLattice:
     """Lay a lattice over `patch` using the world points `xyz` that belong to it."""
     uv = patch.project(xyz)
     uv_min = uv.min(axis=0) - cell
@@ -176,6 +177,25 @@ def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
 
     solid = closed | enclosed
     occupancy = solid.astype(np.uint8)
+
+    # A wall's returns stop wherever the sensor stopped seeing it -- behind a
+    # parked car, under an awning, or simply at the grazing limit of an
+    # airborne scan. Left alone, every building floats above the pavement.
+    # Carrying each column down to terrain contact fixes that, and the cells it
+    # invents are flagged so nothing mistakes them for measurements.
+    extended = np.zeros_like(solid)
+    if extend_to_ground and ground_z is not None and abs(float(patch.v[2])) > 0.5:
+        v_ground = (ground_z - float(patch.centroid[2])) / float(patch.v[2])
+        row_ground = int(np.floor((v_ground - uv_min[1]) / cell))
+        limit_rows = int(round(max_extension / cell))
+        if 0 <= row_ground < nv:
+            columns = np.flatnonzero(solid.any(axis=1))
+            lowest = np.argmax(solid[columns], axis=1)
+            for column, base in zip(columns, lowest):
+                start = max(row_ground, int(base) - limit_rows)
+                if start < base:
+                    extended[column, start:base] = True
+        occupancy[extended] = 1
 
     # --- openings -------------------------------------------------------
     openings: list[Opening] = []
@@ -298,6 +318,9 @@ def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
     inferred = solid & ~measured
     ctx[inferred] |= Ctx.SPARSE_EVIDENCE
     ctx[solid & enclosed & ~measured] |= Ctx.OCCLUDED
+    # Skirt cells were never observed at all -- the sensor's line of sight
+    # ended above them. That is a stronger claim than "filled by closing".
+    ctx[extended] |= Ctx.OCCLUDED | Ctx.SPARSE_EVIDENCE
 
     if ground_z is not None:
         centers_uv = np.stack(np.meshgrid(np.arange(nu), np.arange(nv), indexing="ij"), axis=-1)

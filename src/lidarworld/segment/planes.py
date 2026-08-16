@@ -234,3 +234,101 @@ def assign_patch_channel(cloud: PointCloud, patches: list[PlanarPatch]) -> np.nd
         out[p.point_idx] = p.id
     cloud["patch"] = out
     return out
+
+
+def merge_coplanar(patches: list[PlanarPatch], cloud: PointCloud, *,
+                   angle_deg: float = 10.0, offset_tol: float = 0.30,
+                   gap_tol: float = 2.5) -> list[PlanarPatch]:
+    """Fuse patches that are the same physical surface.
+
+    Region growing is greedy and stops at any local disturbance -- a balcony, a
+    dense window course, a run of dropout -- so one facade routinely comes back
+    as five or six patches. Each of those then gets its own tile lattice, its
+    own boundary, and its own ragged edges, which is what makes reconstructed
+    walls look like swiss cheese.
+
+    Two patches are the same surface when their normals agree, they lie on the
+    same plane, and their extents are close enough to be one wall rather than
+    two parallel ones on opposite sides of a building.
+    """
+    if len(patches) < 2:
+        return patches
+
+    cos_thresh = np.cos(np.radians(angle_deg))
+    boxes = [(cloud.xyz[p.point_idx].min(axis=0), cloud.xyz[p.point_idx].max(axis=0))
+             for p in patches]
+
+    parent = list(range(len(patches)))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for i in range(len(patches)):
+        for j in range(i + 1, len(patches)):
+            a, b = patches[i], patches[j]
+            dot = float(a.normal @ b.normal)
+            if abs(dot) < cos_thresh:
+                continue
+            # Same plane? Compare signed offsets, accounting for flipped normals.
+            gap = abs(a.offset - b.offset) if dot > 0 else abs(a.offset + b.offset)
+            if gap > offset_tol:
+                continue
+            lo_i, hi_i = boxes[i]
+            lo_j, hi_j = boxes[j]
+            if np.any(lo_i - gap_tol > hi_j) or np.any(lo_j - gap_tol > hi_i):
+                continue
+            ra, rb = find(i), find(j)
+            if ra != rb:
+                parent[max(ra, rb)] = min(ra, rb)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(len(patches)):
+        groups.setdefault(find(i), []).append(i)
+
+    merged: list[PlanarPatch] = []
+    for members in groups.values():
+        if len(members) == 1:
+            patch = patches[members[0]]
+            patch.id = len(merged)
+            merged.append(patch)
+            continue
+        merged.append(_refit(patches, members, cloud, len(merged)))
+    return merged
+
+
+def _refit(patches: list[PlanarPatch], members: list[int], cloud: PointCloud,
+           new_id: int) -> PlanarPatch:
+    """Fit one plane through every point of a merged group."""
+    idx = np.concatenate([patches[m].point_idx for m in members])
+    pts = cloud.xyz[idx]
+    mean = pts.mean(axis=0)
+    cov = np.cov(pts.T) if len(pts) > 3 else np.eye(3) * 1e-6
+    _, vecs = eigen_sorted(cov[None])
+    normal = vecs[0, :, 2]
+    # Keep the orientation the largest contributing patch already had, so any
+    # street-facing decision made earlier is not silently reversed.
+    anchor = max(members, key=lambda m: patches[m].support)
+    if float(normal @ patches[anchor].normal) < 0:
+        normal = -normal
+
+    u, v = plane_frame(normal)
+    rel = pts - mean
+    uu, vv = rel @ u, rel @ v
+    residual = rel @ normal
+
+    patch = PlanarPatch(
+        id=new_id, normal=normal, offset=-float(normal @ mean), centroid=mean,
+        u=u, v=v, point_idx=idx, support=len(idx),
+        extent=(float(uu.max() - uu.min()), float(vv.max() - vv.min())),
+        rms=float(np.sqrt(np.mean(residual ** 2))),
+    )
+    patch.area = patch.extent[0] * patch.extent[1]
+    patch.role = max((patches[m] for m in members), key=lambda p: p.support).role
+    patch.confidence = float(np.clip(
+        0.35 + 0.4 * min(1.0, patch.support / 400.0)
+        + 0.25 * (1.0 - min(1.0, patch.rms / 0.32)), 0.1, 0.99))
+    patch.attrs["merged_from"] = len(members)
+    return patch
