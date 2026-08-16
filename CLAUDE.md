@@ -71,6 +71,24 @@ Never merge red CI. Never skip, disable or loosen a test to get green — if a
 test is wrong, fix the test and say why in the commit. If a check is genuinely
 blocked, say so plainly rather than routing around it.
 
+## What we are actually optimising
+
+Not a perfect Denver. Enough structure from Denver to generate a coherent
+Denver-*like* world that someone can walk around in.
+
+    reality -> semantic lossy compression -> World Seed -> generation -> game world
+
+The seed keeps what makes a place recognisably itself -- ground, streets,
+footprints, heights, tree positions -- and throws away the measured surface.
+A 320 m block of LoDo is 121 KB against a 92 MB bundle. The building that comes
+back is not the building that was scanned; it is *a* building on that footprint
+at that height facing that street, which is what a game needs and what airborne
+data cannot supply anyway, having never seen the facade.
+
+This is why reconstruction accuracy is a means, not the goal. Forward validation
+still matters -- it is what stops the skeleton being wrong -- but a facade
+reconstructed to the centimetre is worth nothing the generator cannot invent.
+
 ## The invariant everything hangs off
 
 **The Spatial IR is theme-independent and engine-independent.** No stage before
@@ -107,7 +125,8 @@ src/lidarworld/
   themes/       packs, resolver, procedural texture backend
   backends/     web, glTF, CityJSON  <- the only place materials exist
   ir/           .lwir reader/writer, SIR v0.1 exporter,
-                program.py: generative programs + their measured residual
+                program.py: generative programs + their measured residual,
+                seed.py: the World Seed a generator expands into a place
   data/         source catalogue, tile fetcher, header-only tile index,
                 denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
@@ -119,7 +138,7 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 142 tests, ~3s
+python -m pytest tests/ -q                    # 149 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear

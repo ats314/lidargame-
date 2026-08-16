@@ -127,6 +127,16 @@ def _cmd_compile(args) -> int:
         print(f"  spatial IR  {info['path']} (SIR v0.1: {info['entities']} entities, "
               f"{info['relations']} relations, epistemic {info['epistemic']})")
 
+    if args.seed:
+        from .ir.seed import extract, write as write_seed
+        info = write_seed(extract(world, bundle=out), out / f"{config.name}.seed.json")
+        line = (f"  world seed  {info['path']} ({info['bytes'] / 1024:.0f} KB: "
+                f"{info['buildings']} buildings, {info['roads']} roads, "
+                f"{info['trees']} trees)")
+        if info.get("ratio"):
+            line += f"\n              {info['ratio']:.0f}x smaller than the bundle it came from"
+        print(line)
+
     if args.cityjson:
         from .backends import cityjson as cityjson_backend
         info = cityjson_backend.export(world, out / f"{config.name}.city.json")
@@ -392,6 +402,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="crop to minx,miny,maxx,maxy in the source CRS "
                         "(a real tile is ~1.5 km square; a block is ~400 m)")
     c.add_argument("--gltf", action="store_true", help="also export materialised glTF")
+    c.add_argument("--seed", action="store_true",
+                   help="also write the World Seed: terrain, roads, building "
+                        "envelopes, trees. Lossy by design -- what a generator "
+                        "needs to rebuild the place, not what was measured.")
     c.add_argument("--cityjson", action="store_true",
                    help="also export CityJSON 1.1 (CityGML semantics)")
     c.add_argument("--sir", action="store_true",
