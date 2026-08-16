@@ -31,7 +31,12 @@ jobs:
           lidarworld compile data/samples/townblock.las -o viewer/world -n townblock \
             --theme survey --theme victorian --theme neon
           rm -f viewer/world/*.lwir
+      # enablement lets the workflow turn Pages on itself. If the repository
+      # has never had Pages configured, this is what avoids a manual visit to
+      # Settings -> Pages -> Source -> GitHub Actions.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: viewer
