@@ -1,0 +1,541 @@
+
+SPATIAL WORLD COMPILER
+Master Build Specification and Implementation Handoff
+For Opus 5
+Build directive v0.2  |  16 August 2026
+MISSIONBuild an engine-agnostic compiler that converts raw spatial observations into a persistent, provenance-aware semantic Spatial IR, then compiles that IR into render, simulation, GIS, and sensor-validation targets.
+Basis of this handoff
+The existing Spatial IR + Synthetic LiDAR Round-Trip Benchmark v0.1 bundle.
+The 31-page research landscape report, "Landscape of LiDAR-to-Semantic Spatial IR and World Compilers".
+The current Awesome LiDAR ecosystem review, including Superpoint Transformer/EZ-SP, Amsterdam Urban PointCloud Processing, GSeg3D, major SLAM systems, and simulators.
+The project architecture developed in the current design discussion.
+Implementation contract: build working files and measured demonstrations, not another concept essay.
+
+Architecture at a glance
+
+Figure 1. Current master architecture: observations -> Spatial IR -> theme/physical compilers -> multiple target worlds.
+The figure is conceptual. This specification adds two implementation-critical requirements: observability-aware evaluation and a forward sensor-closure loop. It also requires the core IR to remain engine-agnostic and to preserve measured, inferred, imported, and generated state separately.
+
+0. Instruction to Opus 5
+You are the implementation lead. Do not respond with another high-level architecture essay. Use this document as the implementation contract and build the project incrementally.
+The project already has a v0.1 seed bundle named spatial_ir_roundtrip_v0_1. If that bundle is supplied, preserve its benchmark contract and evolve it in place. If it is not supplied, recreate the same baseline from the normative details in this document before adding v0.2 functionality.
+Your first success condition is not photorealism. It is a complete, measurable loop:
+known structured world    -> sensor observations    -> inverse spatial compiler    -> predicted Spatial IR    -> target world    -> simulated observations    -> quantitative comparison
+The inverse compiler must never read hidden ground-truth IDs, semantic labels, USD prim paths, or simulator-only metadata in the standard benchmark track.
+Do not fake execution results. Every reported metric, benchmark, screenshot, or output path must come from a command that actually ran. If a dependency such as Isaac Sim is unavailable, keep the interface, use a deterministic simulator-independent fallback where possible, and clearly mark the unexecuted NVIDIA-specific step.
+Do not collapse the architecture into a mesh generator. Meshes are target representations. Spatial IR is the stable representation of world identity, semantics, topology, evidence, uncertainty, and multiple geometry forms.
+Do not make the core NVIDIA-only, CUDA-only, Unreal-only, or browser-only. NVIDIA RTX LiDAR is an important validation backend, not the definition of the project. The core should run with ordinary Python/C++ dependencies and should be portable across CPU, CUDA, and ROCm where practical.
+1. Mission
+Build a Spatial World Compiler with the following conceptual boundary:
+RAW OBSERVATIONSLiDAR / imagery / GIS / SLAM / satellite / BIM-CAD        |        vSPATIAL NORMALIZATION        |        vMULTISCALE GEOMETRY + PARTITIONING        |        vGEOMETRIC RECONSTRUCTION        |        vSEMANTIC + RELATIONAL INFERENCE        |        v================================================               UNIFIED SPATIAL IR================================================ stable entity identity hierarchy semantics structural roles topology / relations multi-representation geometry confidence provenance observed / inferred / generated state alternatives / ambiguity time and version support================================================        |        +----------------------+-------------------+        |                      |                   |        v                      v                   vTHEME / GEOMETRY          PHYSICAL            ANALYTICCOMPILER                  COMPILER            COMPILERS        |                      |                   |        v                      v                   vUSD / Unreal / Unity / WebGPU / 3D Tiles / GIS / custom runtime        |        vFORWARD SENSOR SIMULATION / VALIDATION
+The central research and software claim is the boundary in the middle: a persistent semantic Spatial IR that remains stable while sensors, geometry algorithms, materials, themes, engines, and simulator backends change around it.
+2. Why this architecture, and what is already prior art
+Do not claim novelty for individual components that already exist. The literature and product landscape shows strong prior art for nearly every isolated layer:
+MIT SPARK Hydra / Spark-DSG: hierarchical dynamic 3D scene graphs from sensor observations; closest precedent for the semantic/topological world-graph layer.
+TU Delft City3D / 3D BAG / 3dfier / City4CFD: airborne LiDAR and GIS to structured buildings, LoDs, and simulation-ready city geometry.
+OGC CityGML 3.0 / CityJSON: platform-independent semantic information models for urban objects, geometry, hierarchy, relations, and LoDs.
+NVIDIA Omniverse / Isaac Sim RTX LiDAR: known USD world to synthetic LiDAR with rich per-return ground truth; ideal forward operator for synthetic supervision and reconstruction closure.
+Esri CityEngine / CGA: structured geographic objects to procedural architectural geometry, styles, and textures; strongest precedent for the theme/geometry compiler.
+Cesium / 3D Tiles: large-world hierarchical streaming, semantic metadata, engine integration, geospatial coordinate handling.
+ETH Point2Building: learned airborne LiDAR to polygonal building reconstruction.
+Superpoint Graph / Superpoint Transformer / SuperCluster / EZ-SP: scalable point-cloud partitioning into hierarchical superpoints, semantic segmentation, and graph clustering.
+Amsterdam Urban PointCloud Processing: LiDAR + public GIS/elevation/topographic data fusion for automatic urban labeling and region growing.
+GSeg3D / Patchwork++ and related systems: ground segmentation.
+PDAL / Open3D / PCL / CloudCompare: mature point-cloud processing primitives.
+CARLA / AirSim / Gazebo / Isaac Sim: sensor simulation backends.
+The project should therefore reuse or adapt mature components and spend research effort on the missing composition:
+point / superpoint evidence    -> structural role    -> semantic component    -> object hierarchy    -> relations and topology    -> provenance-aware Spatial IR    -> semantic LOD / materialization    -> forward physical consistency
+The strongest differentiators to preserve are:
+1.  Observed vs inferred vs generated state is first-class.
+2.  Provenance is attached to entities, geometry, and relations rather than being a detached log.
+3.  The IR can hold multiple simultaneous geometry representations for one semantic entity.
+4.  Semantic resolution is separate from polygon resolution.
+5.  The inverse reconstruction can be closed through a forward sensor model.
+6.  The same IR can be rematerialized under arbitrary themes without re-running perception.
+7.  The project is engine-agnostic and simulator-backend-agnostic.
+3. Existing v0.1 seed: preserve these contracts
+The v0.1 seed already defines an experimental Spatial Intermediate Representation (SIR) and a synthetic LiDAR round-trip benchmark.
+Current repository layout:
+spatial_ir_roundtrip_v0_1/  README.md  SPEC.md  RUNBOOK.md  SOURCES.md  requirements.txt  schema/    spatial_ir_v0_1.schema.json  sir/    __init__.py    reference.py  benchmark/    capture_isaacsim_6_0_1.py    evaluate_roundtrip.py    make_reference_scene_usd.py    metrics.py    mock_reconstructor.py    smoke_test.py  examples/    reference_scene.sir.json    lidar_poses.json    mock_predicted.sir.json    mock_metrics.json  tests/    test_schema.py
+v0.1 invariants that must not be lost:
+The world model is not the mesh.
+Entity IDs are stable inside a document.
+Entity kind and extensible semantic class are distinct.
+Geometry is a list of replaceable representations.
+Geometry has roles such as source, analysis, render, collision, proxy, and extent.
+epistemic_state distinguishes observed, inferred, generated, manual, imported, and hybrid.
+Provenance records identify mode, source/evidence IDs, algorithm/version, parameter hash, timestamps, and notes.
+Semantic resolution is categorical (macro, object, part, component, detail) and separate from mesh density.
+Relations are first-class directed edges with their own confidence and provenance.
+Observations are separate objects; entities point back to them through provenance.
+Competing hypotheses may coexist through alternatives.
+Simulator-only ground truth is evaluation-only in the standard inverse track.
+The existing closure benchmark is:
+P = F(S)S_hat = R(P)P_hat = F(C(S_hat))
+and evaluates at least:
+E_geometry(S, S_hat)E_semantics(S, S_hat)E_topology(S, S_hat)E_provenance(S_hat)D_sensor(P, P_hat)
+v0.2 should extend this, not replace it.
+4. Definition of done for the first build
+A first serious implementation is complete when all of the following are true:
+1.  A user can provide a .las or .laz point cloud and optional GIS side inputs.
+2.  The pipeline writes a schema-valid predicted.sir.json.
+3.  The SIR contains ground/terrain and at least one non-ground object or building component when present in the data.
+4.  The SIR records evidence and provenance for every inferred entity.
+5.  The system derives multiscale geometric descriptors and at least basic structural roles such as surface interior, boundary, edge/corner candidate, ground junction, and roof junction where evidence supports them.
+6.  The system creates object/component hierarchy and graph relations rather than only per-point labels.
+7.  The SIR can compile to an inspectable USD scene without changing semantic IDs.
+8.  A synthetic benchmark can run end-to-end without using hidden ground truth during reconstruction.
+9.  The benchmark reports geometry, semantic, relation/topology, confidence/provenance, and sensor-space metrics separately.
+10.  A simple theme can rematerialize at least two semantic classes or structural roles without changing the reconstructed Spatial IR.
+11.  The repository contains unit tests, deterministic example data, a one-command smoke test, and a build-status report with actual executed commands.
+Photorealism, full-city reconstruction, window-perfect airborne reconstruction, and a production game runtime are not required for this first milestone.
+5. Target repository architecture
+Create or evolve toward this structure:
+spatial-world-compiler/  pyproject.toml  README.md  LICENSE  BUILD_STATUS.md  ARCHITECTURE.md  SOURCES.md  swc/    __init__.py    cli.py    config.py    ir/      schema_v0_2.json      model.py      validate.py      migrate_v0_1.py      ids.py      provenance.py      confidence.py      relations.py    ingest/      las.py      npz.py      gis.py      crs.py      observations.py    preprocess/      normalize.py      ground.py      denoise.py      tile.py      registration.py    geometry/      neighborhoods.py      descriptors.py      normals.py      planes.py      boundaries.py      reconstruction.py      observability.py    partition/      base.py      region_grow.py      ezsp_adapter.py      superpoint_adapter.py    semantics/      base.py      las_priors.py      rule_baseline.py      spt_adapter.py      fusion.py    graph/      hierarchy.py      structural_roles.py      relations.py      hypotheses.py    compile/      usd.py      gltf.py      cityjson.py      theme.py      materials.py    simulate/      base.py      raycast.py      isaac_rtx.py      carla.py    evaluate/      entity_match.py      geometry.py      semantics.py      topology.py      confidence.py      provenance.py      sensor.py      observability.py    runtime/      tiles.py      semantic_lod.py      cache.py      coordinates.py  configs/    airborne_default.yaml    mobile_default.yaml    synthetic_default.yaml  themes/    realistic_default.yaml    victorian_demo.yaml    cyberpunk_demo.yaml  benchmark/    scenes/    trajectories/    run_roundtrip.py    compare_baselines.py  examples/    simple_block/    sample_laz/  tests/    unit/    integration/    regression/  docs/    sir_v0_2.md    plugin_interfaces.md    benchmark_protocol.md
+Do not create empty architectural directories merely for appearance. Implement the modules needed by the current milestone and add others as interfaces or documented future targets only when they have a clear use.
+6. Core software interfaces
+Use explicit adapters so algorithms can be swapped without changing Spatial IR.
+At minimum define these protocol-level interfaces:
+class GroundSegmenter(Protocol):    def segment(self, observation, config) -> GroundResult: ...class Partitioner(Protocol):    def partition(self, points, features, config) -> PartitionResult: ...class SemanticBackend(Protocol):    def predict(self, points, partitions, context, config) -> SemanticEvidence: ...class ReconstructionBackend(Protocol):    def reconstruct(self, evidence, config) -> ReconstructionResult: ...class RelationInferencer(Protocol):    def infer(self, entities, evidence, config) -> list[Relation]: ...class TargetCompiler(Protocol):    def compile(self, sir_document, output_path, config) -> CompileResult: ...class SensorSimulator(Protocol):    def capture(self, scene_path, trajectory, sensor_config) -> Observation: ...class MaterialResolver(Protocol):    def resolve(self, material_request, asset_context) -> MaterialAsset: ...
+Every backend result should expose its algorithm/version/config hash for provenance.
+7. Spatial IR v0.2: normative model
+v0.2 should remain JSON-serializable and schema-valid. Python dataclasses or Pydantic models may be used internally, but JSON Schema remains the interchange contract.
+7.1 World
+Required world-level fields:
+sir_versionworld.idworld.linear_unit = "m"world.up_axis = "Z"world.coordinate_frameworld.crs (nullable)world.originentities[]relations[]observations[]alternatives[]metadata
+For geospatial data, preserve the original CRS and also support a local metric frame for numerically stable reconstruction/rendering.
+7.2 Entity identity and hierarchy
+Each entity must include:
+idkindclasssemantic_resolutionepistemic_stateconfidencegeometry[]provenance[]attributeslabels
+Add explicit hierarchy fields or standardized relations so the following can be represented cleanly:
+World  -> Region / Tile    -> Building      -> Roof      -> Wall        -> SurfaceInterior        -> Edge        -> Corner        -> OpeningBoundary      -> Window / Door    -> Road      -> Segment      -> Curb / Boundary    -> Vegetation      -> Tree / Canopy / Trunk hypothesis
+Prefer first-class part_of / contains relations over duplicating hierarchy in two unrelated mechanisms. A cached parent field is acceptable for speed if it is validated against relations.
+7.3 Structural roles
+Add an extensible structural_roles field. This is the direct formalization of the original "edge dots versus center-mass dots" idea.
+Minimum generic role vocabulary:
+surface_interiorsurface_boundarylinear_edgeconvex_edgeconcave_edgecorneropening_boundaryground_junctionroof_junctionobject_contactridgevalleyeavecurb_edgeroad_center_regionocclusion_boundaryunknown_structural_role
+Structural role is not the same as semantic class.
+Example:
+{  "class": "WallSurface",  "structural_roles": ["convex_edge", "roof_junction"],  "attributes": {    "orientation": "vertical",    "faces_street": "road_7"  }}
+7.4 Multiscale descriptors
+Do not store every raw descriptor in the canonical IR by default. Store dense point/superpoint descriptors in analysis sidecars and promote only persistent or useful summaries to the entity.
+The geometry engine should compute, where meaningful:
+surface normallocal covariance eigenvaluesplanaritylinearityscattering / sphericityroughnesscurvature proxynormal variationverticalityheight above groundpoint densityboundary scoreneighbor-class transitionsdistance to grounddistance to candidate roof/opening/road
+Compute at multiple neighborhood scales. Use configurable metric radii and/or k-nearest neighborhoods because sensor densities vary.
+For local covariance C with eigenvalues lambda1 >= lambda2 >= lambda3, useful derived quantities include:
+linearity  = (lambda1 - lambda2) / lambda1planarity  = (lambda2 - lambda3) / lambda1scattering = lambda3 / lambda1
+The eigenvector of the smallest eigenvalue is a local surface-normal estimate when the neighborhood is sufficiently planar.
+7.5 Geometry representations
+One entity may simultaneously reference:
+observed point evidenceanalysis points / superpointssparse occupancy / octreeanalytic plane / primitivepolygon / polylinerender meshcollision proxyprocedural parametersexternal target geometry
+Identity remains the same even as representations change.
+This is a key invariant:
+semantic identity != mesh identity
+7.6 Epistemic state and provenance
+Keep v0.1 states:
+observedinferredgeneratedmanualimportedhybrid
+A roof measured directly by LiDAR may have observed point evidence but an inferred fitted plane. Do not incorrectly mark the plane itself as observed.
+Example:
+Roof_8 source points -> observedRoof_8 fitted plane  -> inferred/geometric_inferenceRoof_8 class label   -> inferred/semantic_inference or imported GIS evidenceVictorian dormer     -> generated/theme grammar
+Provenance must be attached independently to geometry, semantics, and relations when their sources differ.
+7.7 Confidence and calibration
+Keep separate confidence axes:
+overallgeometrysemanticstopology
+Add optional fields for:
+observabilitysupport_strengthcalibration_method
+Confidence is not decoration. Evaluate calibration with Brier score and expected calibration error where appropriate.
+7.8 Observability: required v0.2 addition
+A central problem in airborne LiDAR is that many surfaces are physically unobserved, especially vertical facades and windows. The benchmark must not confuse "not seen" with "failed reconstruction."
+Add observation-support records such as:
+{  "observation_id": "scan_001",  "point_count": 184,  "visibility_fraction": 0.73,  "mean_range_m": 43.2,  "incidence_angle_deg_p50": 18.5,  "support": "direct_return"}
+Possible support states:
+direct_returnoccludedout_of_fovbelow_sampling_densityinferred_from_contextimported_externalunknown
+All benchmark metrics should be reportable both globally and stratified by observability.
+7.9 Relations
+Core relation vocabulary:
+part_ofcontainsboundsbounded_byadjacent_toconnected_tosupportsintersectsinsidederived_fromcorresponds_toabovebelowfacesoccludesparallel_toperpendicular_to
+Each relation has:
+idtypesourcetargetconfidenceprovenanceattributes
+Relations are not merely derived convenience fields. They are part of the representation being evaluated.
+7.10 Alternatives and hypotheses
+Preserve multiple candidate interpretations when evidence is ambiguous.
+Examples:
+roof type: hip 0.58 / gable 0.42wall continuation: candidate A 0.71 / candidate B 0.29opening: real window 0.46 / occlusion gap 0.54
+Do not force uncertain airborne data into false precision.
+7.11 Time and versioning
+Design for time without requiring a full temporal engine in v0.2.
+Entities and observations should support:
+valid_fromvalid_toobserved_atsupersedessuperseded_by
+This allows later evolution from static world reconstruction to temporal world state.
+8. Inverse compiler: implementation pipeline
+The inverse compiler should be staged and inspectable. Each stage writes diagnostics so failures can be localized.
+Stage 1 - Ingest and normalize
+Inputs:
+LAS / LAZNPZ synthetic observationsoptional GeoJSON / Shapefile / CityJSON / footprint vectorsoptional imagery metadataoptional sensor trajectory/calibration
+Required actions:
+preserve original CRS and coordinate metadata;
+transform to local metric working coordinates;
+preserve LAS dimensions such as classification, intensity, return number, GPS time when present;
+record preprocessing history and hashes;
+tile very large inputs deterministically;
+never discard original source observations.
+Recommended libraries:
+PDAL and/or laspy for LAS/LAZpyproj for CRS transformsGeoPandas/Shapely for vector GISNumPy/SciPy for baseline geometryOpen3D/PCL adapters where useful
+Stage 2 - Ground and terrain
+Backend choice should depend on modality:
+Airborne / public LiDAR:
+1.  Use trustworthy existing LAS ground classification as evidence when available.
+2.  Otherwise use a suitable airborne ground filter such as a PDAL ground-classification pipeline.
+3.  Derive a terrain/DTM representation and height-above-ground feature.
+Mobile / terrestrial LiDAR:
+Use an adapter for GSeg3D, Patchwork++, or equivalent when available, with a deterministic fallback.
+Ground segmentation output must be evidence, not the final world model.
+Stage 3 - Multiscale neighborhoods and descriptors
+Build scalable neighborhood queries using a KD-tree, voxel hash, sparse grid, octree, or GPU graph depending on scale.
+Compute multiscale geometry features. Persist a compact analysis sidecar keyed by stable point/superpoint indices.
+Stage 4 - Partition points into coherent regions
+Use an interchangeable partition backend.
+Required baseline:
+deterministic voxel + region-growing or supervoxel partitioner that works without learned weights.
+Preferred experimental backend:
+EZ-SP / Superpoint Transformer style hierarchical superpoint partitioning.
+The adapter should convert backend-specific clusters into a common form:
+partition_idmember point indicescentroidbboxnormal summaryfeature summaryneighbor partitionssource observation IDs
+Do not let an SPT-specific internal structure become the canonical IR.
+Stage 5 - Semantic evidence
+Treat semantic segmentation as evidence for graph construction, not the final product.
+Sources may include:
+ASPRS/LAS classesSPT or another point modelGIS footprintsroad centerlines/polygonsaerial or street imageryheight/shape rulesopen-vocabulary models later
+Fuse evidence explicitly and preserve source provenance.
+For the deterministic baseline, implement rules that can at least distinguish:
+ground/terrainbuilding candidatevegetation candidateroad/transport candidateunknown
+Use existing LAS classification as a prior, not unquestioned truth.
+Stage 6 - Geometric reconstruction
+Start with simple primitives and fitted surfaces before learned mesh generation.
+Minimum baseline:
+RANSAC or robust plane extraction;
+horizontal/vertical orientation classification;
+connected surface region growing;
+boundary extraction;
+plane intersection lines;
+roof/wall candidate grouping;
+terrain mesh or height-field proxy;
+object extents and bounding volumes.
+Do not synthesize facade detail during reconstruction benchmark runs.
+Later interchangeable backends can include City3D-like methods, Point2Building-like learned reconstruction, or custom parametric methods.
+Stage 7 - Structural-role inference
+This is a central project-specific layer.
+For each patch/surface/component, infer contextual role using geometry and graph neighborhood:
+interior vs boundaryedge vs cornerconvex vs concave junctionnear groundnear roofnear openinga street-facing surfacepart of ridge/eave/valleyroad boundary / curb candidate
+The role inferencer should use both continuous descriptors and explicit neighborhood relations. A bitmask may be used as a compact local feature, but the canonical representation is not restricted to a voxel mask.
+Stage 8 - Object hierarchy
+Create stable semantic entities:
+points/superpoints -> surface -> component -> object -> region/tile
+Example:
+Building_17  Roof_1    RoofPlane_1    Ridge_1    Eave_1  Wall_4    SurfaceInterior_4    ConvexEdge_7    GroundJunction_3  WindowCandidate_2
+A building does not need every component to exist. Missing evidence must remain missing or explicitly inferred.
+Stage 9 - Relation inference
+Infer relations from measurable geometry:
+incidence/intersection;
+distance and adjacency;
+normal angle;
+containment;
+shared boundaries;
+vertical ordering;
+topology of fitted components;
+GIS contextual relationships.
+Attach confidence and provenance to every relation.
+Stage 10 - Confidence and provenance propagation
+Each stage emits uncertainty. Do not average unrelated confidence numbers blindly.
+For v0.2 use a transparent heuristic combination with logged inputs, then calibrate against synthetic ground truth. The code structure must permit learned calibration later.
+Stage 11 - Write SIR
+The final output is a valid Spatial IR document plus optional analysis sidecars. Raw dense point arrays should not bloat the main JSON; use URIs and hashes for sidecar data.
+9. Airborne versus mobile sensing: do not pretend they observe the same world
+The compiler must distinguish sensor regimes.
+Airborne profile
+Strengths:
+terrainroof geometrybuilding footprints/massingcanopyroads and broad surface geometrylarge structures
+Weaknesses:
+vertical facadeswindows/doorsunder-canopy detailoccluded street furnitureinteriors
+Airborne reconstruction should therefore infer missing walls or facade structure with lower confidence and explicit provenance.
+Mobile / terrestrial profile
+Strengths:
+facadescurbsvehiclesstreet furnitureopeningstrunksstreet-level geometry
+Weaknesses:
+roof topsoccluded rear surfaceslarge-scale global consistency without SLAM/GNSS
+Multimodal fusion
+The long-term system can combine:
+USGS/public airborne LiDARmobile LiDARGIS footprints and roadsaerial imagerystreet imagery where licensed/allowedBIM/CADSLAM trajectoriessatellite products
+Spatial IR is the fusion boundary so missing evidence can be added later without rebuilding every downstream target manually.
+10. Synthetic round-trip benchmark
+This is the scientific backbone of the project.
+10.1 Forward/inverse cycle
+For a known scene S, forward sensor F, inverse model R, and target compiler C:
+P = F(S)S_hat = R(P)P_hat = F(C(S_hat))
+Evaluate both latent-world fidelity and measurement closure.
+10.2 Required anti-cheating boundary
+The inverse model may receive only declared observation inputs:
+XYZ pointspublic sensor pose/trajectorypublic calibrationoptional intensity/return attributes if the track declares themoptional declared GIS/imagery side data
+The inverse model may not receive:
+hidden SIR entity IDsUSD prim pathsRTX stable object IDshidden material IDssimulator semantic labelshidden scene topology
+Store hidden IDs in an evaluation-only namespace or separate file.
+10.3 Sensor backends
+Define a backend interface.
+Preferred first backend:
+NVIDIA Isaac Sim / Omniverse RTX LiDAR because it can provide exact scene correspondence for evaluation.
+Fallback backend:
+custom deterministic ray-caster against simple analytic/mesh geometry so the core benchmark runs without Isaac Sim.
+Future adapters:
+CARLAAirSimGazeboother simulators
+10.4 Benchmark scenes
+Create at least three controlled scenes.
+Scene A - Simple block
+flat terrainone rectangular buildingone simple pitched or flat roofone road stripone tree primitive or vegetation object
+Purpose: pipeline correctness.
+Scene B - Structural roles
+building with multiple wall planesconvex and concave cornersroof junctionsa few opening recesses or window-like gapscurb/road boundary
+Purpose: edge/corner/opening role inference.
+Scene C - Small urban block
+multiple buildingsroads/sidewalksvegetationocclusionmixed heights
+Purpose: instance separation, hierarchy, scaling, and semantic relations.
+Create both airborne and mobile trajectories where appropriate.
+10.5 Metrics
+Report axes separately.
+Geometry
+matched entity AABB IoUcentroid RMSEsurface normal angular errorplane offset errormesh/point Chamfer distance where applicableHausdorff or p95 nearest-neighbor distancecoverage at 5 cm / 10 cm / 25 cm
+Semantics
+entity class accuracy / macro F1point or superpoint semantic F1 when availableinstance precision/recall or panoptic metrics where meaningfulstructural-role precision/recall/F1
+Topology
+relation precisionrelation recallrelation F1hierarchy correctnessconnected-component/object consistency
+Confidence
+Brier scoreexpected calibration errorconfidence stratified by observability
+Provenance
+provenance violation rateobserved-vs-inferred labeling errorsmissing evidence referencesinvalid source references
+Sensor closure
+symmetric Chamfer-L1p95 nearest-neighbor distancecoverage within fixed tolerancesper-ray hit/miss consistency when backend supports ray identityrange residual distributions
+Performance
+points/secwall-clock time by stagepeak RAMpeak VRAMSIR entity countSIR/sidecar sizecompiled scene size
+Report metrics stratified by visibility/observability whenever possible.
+10.6 Required baselines
+Compare at least:
+A. geometry-only reconstruction / mesh baselineB. geometry + semantic labelsC. geometry + semantics + hierarchy/topologyD. full SIR with provenance/confidence
+The central hypothesis is weakened if D adds no measurable benefit to validation, editing, simulation, semantic queries, or downstream compilation.
+11. Theme, geometry, material, and asset compiler
+Do not conflate theme with texture files.
+A theme is a declarative rule set over semantics and context.
+Example request:
+entity.class = WallSurfaceentity.structural_role = convex_edgetheme = Cyberpunk_2080context = exterior / street-facing
+Theme compiler result might request:
+geometry_modifier = emissive_vertical_railmaterial_family = weathered_composite_panelemissive = trueasset_tags = [industrial, futuristic]
+The material resolver can satisfy the request from multiple sources:
+procedural shader/materialCC0/public-domain packuser-supplied asset packoffline AI-generated materialengine-native materialphotogrammetry-derived materialfallback canonical material
+Every non-procedural asset should carry source, license, scale, and provenance metadata.
+11.1 Theme file format
+Use YAML or JSON. Example:
+name: cyberpunk_demoversion: 0.1rules:  - match:      class: WallSurface      structural_role: convex_edge    emit:      geometry_modifier: emissive_rail      material:        family: composite_panel        tags: [dark, wet, futuristic]  - match:      class: Road      structural_role: curb_edge    emit:      material:        family: asphalt        tags: [wet]      geometry_modifier: luminous_lane_edge
+11.2 Generated geometry must remain epistemically separate
+If a Victorian theme adds quoins, trim, dormers, signs, or decorative assets, those entities must be marked generated, linked to the source entity, and never silently treated as measured reality.
+Example:
+Quoin_12  epistemic_state = generated  derived_from = WallCorner_4  provenance.algorithm = VictorianTheme.geometryGrammar
+11.3 First theme demo
+Implement only enough to prove separation:
+Realistic default themeCyberpunk or Victorian demo theme
+At minimum the theme must visibly change rules for two different semantic/structural contexts, not merely apply one global texture.
+12. Target compilers
+12.1 USD first
+Keep OpenUSD as the first target because it supports hierarchy, metadata, relationships, simulation workflows, and the NVIDIA validation loop.
+The USD compiler should:
+preserve SIR IDs in custom metadata;
+preserve semantic classes and epistemic state;
+emit appropriate geometry representations;
+optionally emit generated renderer proxies without altering canonical SIR;
+maintain a map from SIR entity ID to target prim path for evaluation/debugging only.
+12.2 glTF / Web target
+Add a glTF export once USD works. glTF does not need to carry every SIR semantic field; export a metadata sidecar or use extensions where appropriate.
+12.3 CityJSON / CityGML direction
+Do not attempt full CityGML conformance in the first milestone. Add a mapping document and, if practical, a minimal CityJSON exporter for building/terrain entities.
+12.4 3D Tiles / Cesium direction
+Design tile IDs and metadata so future SIR entities can be streamed through 3D Tiles without changing identity. Do not build the full planetary runtime before the inverse compiler is validated.
+13. World runtime and semantic LOD
+This is a later milestone but the IR must not block it.
+Traditional LOD reduces triangles. Semantic LOD can reduce world ontology:
+100 km: city / terrain region10 km: building objects and major roads1 km: roof + walls + road segments100 m: windows, doors, trees, curbs10 m: trim, joints, signs, small generated detail
+Runtime responsibilities eventually include:
+geographic tilingout-of-core pagingsemantic LOD selectionmesh/asset instancingcoordinate rebasingcachingocclusionmaterial resolutionincremental updatescross-tile relation management
+Do not implement a custom GPU runtime until existing engine targets expose a measured limitation that justifies it.
+14. First implementation sequence
+Build in this order.
+Milestone 0 - Reproduce and harden v0.1
+Deliverables:
+schema validation workssmoke test passesexact reconstruction scores near-perfectperturbed mock reconstruction scores lowerUSD compiler syntax/tests passbenchmark anti-cheating boundary documented
+If Isaac Sim is unavailable, do not block the rest of the project.
+Milestone 1 - Real LAS/LAZ ingest
+Deliverables:
+swc ingest input.laz -> observation packageCRS preservedlocal coordinates generatedLAS dimensions preservedsource hash recordedbasic tiling works
+Milestone 2 - Deterministic geometry baseline
+Deliverables:
+ground extractionheight normalizationnormals / covariance descriptorspartitioningplane extractionbasic surface boundariesbuilding/terrain/road/vegetation candidatesSIR output
+No neural model is required yet.
+Milestone 3 - Hierarchy, structural roles, and relations
+Deliverables:
+surface -> component -> object hierarchysurface_interior / boundary / edge / corner rolesroof/ground junctionspart_of / adjacent_to / intersects / above/below relationsconfidence and provenance for each inference
+This is the first milestone that tests the unique Spatial IR layer.
+Milestone 4 - Superpoint/semantic adapters
+Add:
+EZ-SP / SPT adapter where environment permitsLAS classification priorsGIS fusion adaptersemantic evidence fusion
+The deterministic baseline must remain usable without GPU model dependencies.
+Milestone 5 - Synthetic closure
+Deliverables:
+custom deterministic ray-caster closure runs everywhereIsaac Sim RTX LiDAR adapter where availableScene A/B/C benchmarksobservability-aware metricsbaseline comparison A/B/C/D
+Milestone 6 - Theme compiler
+Deliverables:
+theme schemamaterial requestsprocedural default materialsat least two context-specific geometry/material rulesgenerated provenanceUSD output comparisons
+Milestone 7 - Public LiDAR demonstration
+Run on a small, manageable public or user-supplied airborne LiDAR tile. Produce:
+source observationlabeled/partition diagnosticpredicted SIRcompiled USD/glTF previewmetrics that do not require unavailable ground truthconfidence/provenance report
+Milestone 8 - Scale and streaming experiments
+Only after correctness:
+tile graphout-of-core sidecarsparallel preprocessingsemantic LOD prototype3D Tiles or Cesium adapter
+15. CLI contract
+Implement a coherent CLI. Exact syntax may evolve, but the following commands should exist conceptually:
+swc validate-sir world.sir.jsonswc ingest input.laz \  --out work/observation.json \  --config configs/airborne_default.yamlswc reconstruct work/observation.json \  --out work/predicted.sir.json \  --config configs/airborne_default.yamlswc compile work/predicted.sir.json \  --target usd \  --out work/predicted.usdaswc theme work/predicted.sir.json \  --theme themes/cyberpunk_demo.yaml \  --out work/cyberpunk.sir.jsonswc simulate work/predicted.usda \  --backend raycast \  --trajectory benchmark/trajectories/airborne.json \  --out work/rescan.npzswc evaluate \  --gt-sir benchmark/scenes/simple_block/reference.sir.json \  --pred-sir work/predicted.sir.json \  --gt-observation work/reference_scan.npz \  --pred-observation work/rescan.npz \  --out work/metrics.jsonswc demo --scene simple_block
+The one-command demo is mandatory.
+16. Configuration and reproducibility
+Every run should produce a manifest containing:
+software version / git commitconfig fileresolved parametersinput hashesalgorithm backend names and versionsrandom seedshardware/device summarystart/end timeoutput hasheswarnings
+Use deterministic seeds where possible. Do not bury parameters in code.
+Recommended configuration pattern:
+pipeline:  ground_backend: auto  partition_backend: region_grow  semantic_backend: rule_baseline  reconstruction_backend: plane_graphgeometry:  radii_m: [0.15, 0.5, 2.0]  normal_k: 32  plane_distance_threshold_m: 0.08confidence:  method: heuristic_v0output:  write_analysis_sidecar: true
+Defaults must be reasonable but never treated as universally optimal across sensor regimes.
+17. Engineering rules
+1.  No hidden global state. Pass config and device explicitly.
+2.  No hard-coded `.cuda()` calls in core code. Use device abstraction.
+3.  Keep dense arrays out of JSON. Use NPZ/Parquet/PLY/LAZ sidecars with hashes and URIs.
+4.  Use stable IDs. Deterministic IDs are preferred where reproducible matching is possible.
+5.  Log every inference stage. A failed semantic graph must be debuggable back to evidence.
+6.  Preserve the raw observation. Never overwrite source data.
+7.  Schema migration is explicit. v0.1 documents must migrate to v0.2 rather than silently changing interpretation.
+8.  Unit-test geometry. Plane fits, normal orientation, boundary tests, relation rules, coordinate transforms, and visibility logic need small synthetic tests.
+9.  Integration-test the entire loop. A pipeline that only passes unit tests is insufficient.
+10.  Avoid license contamination. Keep GPL tools as optional subprocess/plugin boundaries unless project licensing intentionally accepts GPL obligations.
+11.  No renderer-specific semantics in the IR. Unreal/Unity/USD concepts belong in adapters.
+12.  No theme-generated detail in reconstruction scores. Reconstruction and artistic materialization are separate tracks.
+18. Licensing and dependency policy
+The source landscape includes mixed licenses. Before vendoring or linking code, verify the current repository license.
+Known useful examples from the reviewed sources:
+MIT SPARK Hydra / Spark-DSG: BSD-2-ClauseSuperpoint Transformer / EZ-SP repository: MITGSeg3D ground segmentation repository: BSD-3-ClauseOpen3D: MITCesium Native / CesiumJS: Apache-2.0Amsterdam Urban PointCloud Processing: GPL-3.0City3D: GPL-3.0-or-later
+Treat GPL code carefully if the desired core is permissively licensed. It is acceptable to:
+study the paper/algorithmuse a separate optional executable/pluginreimplement the method independently from published descriptions where legally appropriate
+Do not copy GPL implementation code into a permissive core and relabel it.
+Asset licensing is separate from code licensing. Theme packs must record source/license metadata. Procedural materials are the zero-dependency default.
+19. Research questions the implementation must make testable
+The project is strongest if it can falsify itself.
+Build experiments that answer:
+1.  Does a persistent semantic/topological IR improve reconstruction selection compared with a mesh-only baseline?
+2.  Can forward LiDAR closure distinguish geometrically plausible but physically inconsistent reconstructions?
+3.  Does explicit provenance prevent generated detail from contaminating measured-world analysis?
+4.  Can semantic LOD reduce runtime cost more effectively than geometry-only LOD for large worlds?
+5.  Does a hierarchical superpoint frontend reduce the cost of structural-role inference without losing critical boundaries?
+6.  Can one reconstructed SIR be rematerialized into substantially different visual worlds without re-running perception?
+7.  Can the same SIR drive rendering, collision/navigation, GIS queries, and sensor simulation without duplicating world identity?
+8.  How does performance change with airborne versus mobile LiDAR density and observability?
+9.  What value does topology add when geometry closure is already similar?
+10.  Which confidence signals are actually calibrated enough to trust for inferred/unobserved surfaces?
+Do not tune the benchmark solely to make the architecture look good.
+20. Minimum acceptance tests
+Implement tests equivalent to the following.
+Schema and identity
+valid document acceptedinvalid version rejectedduplicate entity ID rejectedrelation to missing entity rejectedbad provenance reference rejectedv0.1 migration preserves semantic meaning
+Geometry
+plane fit recovers known synthetic planenormal direction is consistent after orientation stepconvex/concave edge rule works on synthetic wedgeboundary score increases near known surface boundaryheight-above-ground correct on sloped terrain fixture
+Hierarchy/topology
+wall part_of buildingroof intersects/supports wall where appropriateadjacency is symmetric when relation semantics require itcontainment and part relations do not create cycles unless explicitly allowed
+Provenance
+fitted plane cannot be marked observed without direct imported geometry justificationtheme-generated object marked generatedsemantic model prediction records semantic_inference provenanceGIS import records structured_import provenance
+Anti-cheating
+standard inverse observation package contains no hidden entity IDssimulator ground-truth mapping stored separatelyattempt to pass hidden IDs into reconstructor fails benchmark validation
+Closure
+exact reconstruction -> near-perfect metricscontrolled perturbation -> geometry metrics degradewrong class with same geometry -> semantic metrics degrade while geometry stays similarwrong relation with same geometry -> topology metrics degradepoor rescan geometry -> sensor closure degrades
+Observability
+fully occluded surface not counted as directly observedout-of-FOV entity tagged appropriatelymetrics can filter direct-return-only entities
+21. First public-data prototype
+Do not start with an entire city.
+Use one small tile that contains:
+several buildings with simple roofsa road or paved surfacevegetationclear ground
+Preferred input form: classified LAS/LAZ with known CRS. Optional building footprints and road vectors may be added as a separate benchmark track.
+Run two tracks:
+Track A - LiDAR only
+Use only declared point-cloud attributes and calibration/CRS.
+Track B - LiDAR + GIS
+Add footprints/road data and measure how much object hierarchy and geometry improve.
+The comparison is important because the Amsterdam data-fusion precedent demonstrates that public structured data can dramatically strengthen urban labeling. Spatial IR should preserve exactly which conclusions came from LiDAR and which came from GIS.
+22. Theme demo acceptance criteria
+The theme system is proven only if:
+1.  The original reconstructed SIR remains unchanged or is referenced immutably.
+2.  A theme layer creates or selects material/geometry outputs based on semantic context.
+3.  At least two structural roles behave differently.
+4.  Generated entities carry generated provenance.
+5.  Switching theme does not require reprocessing the raw LiDAR.
+6.  The same entity IDs remain traceable across theme outputs.
+Example demonstration:
+WallSurface surface_interior  realistic -> brick/plaster PBR  cyberpunk -> dark composite panelWallSurface convex_edge  realistic -> masonry corner treatment  cyberpunk -> emissive rail geometryRoad curb_edge  realistic -> concrete curb  cyberpunk -> luminous curb strip
+This proves that the system is not merely a global texture swap.
+23. Deliverables Opus 5 must produce
+For each milestone, produce working files, not prose-only plans.
+At the end of the first major pass, the repository should contain:
+1. schema_v0_2.json2. Python models/validation/migration code3. LAS/LAZ ingest4. ground/normal/descriptor pipeline5. deterministic partition and plane reconstruction6. structural-role inference7. hierarchy and relation graph construction8. provenance/confidence propagation9. SIR writer10. USD compiler11. deterministic raycast simulator12. round-trip evaluator13. one synthetic end-to-end demo14. one real LAZ end-to-end demo if data is supplied/obtainable15. basic theme compiler demo16. tests17. README with exact commands18. BUILD_STATUS.md with actual executed results, failures, and next blockers
+If a dependency cannot be installed, do not abandon the milestone. Implement the interface and a working fallback, document the limitation, and continue.
+24. Required BUILD_STATUS.md format
+Keep a factual execution ledger.
+# Build Status## Environment- OS:- Python:- GPU/device:- git commit:## Completed- [x] ...## Commands actually run- paste exact shell commands here- include stdout/stderr excerpts when diagnostically useful## Actual outputs- path:- metric:## Failing tests / blockers- ...## Unexecuted optional paths- Isaac Sim RTX LiDAR: reason ...## Next concrete step- ...
+Never substitute estimated results for actual results.
+25. Source study priorities
+Read these before replacing their functionality:
+1.  MIT SPARK Hydra / Spark-DSG - world graph architecture and hierarchy.
+2.  OGC CityGML 3.0 / CityJSON - semantic city data model, boundary surfaces, LoDs, serialization philosophy.
+3.  TU Delft City3D / 3D BAG / 3dfier / City4CFD - airborne reconstruction and GIS fusion.
+4.  Superpoint Transformer / SuperCluster / EZ-SP - scalable hierarchical point partitioning and graph clustering.
+5.  Amsterdam Urban PointCloud Processing - data fusion and urban labeling.
+6.  NVIDIA Isaac Sim RTX LiDAR - forward operator, synthetic ground truth, sensor closure.
+7.  Esri CityEngine/CGA - procedural geometry and style grammar concepts.
+8.  Cesium/3D Tiles - large-world metadata and streaming.
+9.  Point2Building - learned building reconstruction alternative.
+10.  LiDARsim and related realistic LiDAR simulation papers - sensor realism and sim-to-real issues.
+Do not blindly copy these systems. Study where their abstractions should terminate at the Spatial IR boundary.
+26. Reference URLs
+MIT SPARK publications: https://mit.edu/sparklab/publications.html
+Hydra: https://github.com/MIT-SPARK/Hydra
+Khronos: https://github.com/MIT-SPARK/Khronos
+City3D paper: https://arxiv.org/abs/2201.10276
+City3D code: https://github.com/tudelft3d/City3D
+TU Delft 3D geoinformation code: https://3d.bk.tudelft.nl/code/
+City4CFD: https://github.com/tudelft3d/city4cfd
+3D BAG: https://3d.bk.tudelft.nl/projects/3dbag/
+OGC CityGML: https://www.ogc.org/standards/citygml/
+CityJSON: https://docs.ogc.org/cs/20-072r5/20-072r5.html
+NVIDIA RTX LiDAR extension: https://docs.omniverse.nvidia.com/kit/docs/omni.sensors.nv.lidar/latest/lidar_extension.html
+Isaac Sim RTX sensor annotators: https://docs.isaacsim.omniverse.nvidia.com/6.0.0/sensors/isaacsim_sensors_rtx_annotators.html
+Cesium 3D Tiles: https://cesium.com/why-cesium/3d-tiles/3d-tiles-essentials/
+Cesium Native: https://github.com/CesiumGS/cesium-native
+ArcGIS CityEngine: https://www.esri.com/en-us/arcgis/products/arcgis-cityengine/overview
+Point2Building paper: https://arxiv.org/abs/2403.02136
+Point2Building code: https://github.com/prs-eth/point2building
+Superpoint Transformer / SuperCluster / EZ-SP: https://github.com/drprojects/superpoint_transformer
+Amsterdam Urban PointCloud Processing: https://github.com/Amsterdam-AI-Team/Urban_PointCloud_Processing
+GSeg3D: https://github.com/dfki-ric/ground_segmentation
+PDAL: https://pdal.io/
+Open3D: https://www.open3d.org/
+Awesome LiDAR index: https://github.com/szenergy/awesome-lidar
+LiDARsim: https://arxiv.org/abs/2006.09348
+USGS LiDAR/3DEP information: https://www.usgs.gov/faqs/what-lidar-data-and-where-can-i-download-it
+27. Sample Spatial IR v0.2 fragment
+This is illustrative, not the complete JSON Schema.
+{  "sir_version": "0.2.0",  "world": {    "id": "world_demo",    "linear_unit": "m",    "up_axis": "Z",    "coordinate_frame": "local_enu",    "crs": "EPSG:XXXX",    "origin": [0.0, 0.0, 0.0]  },  "entities": [    {      "id": "building_17",      "kind": "object",      "class": "Building",      "semantic_resolution": "object",      "epistemic_state": "inferred",      "confidence": {        "overall": 0.91,        "geometry": 0.94,        "semantics": 0.92,        "topology": 0.87      },      "geometry": [        {          "id": "building_17_bbox",          "representation": "bbox",          "role": "extent",          "bbox": {            "min": [0.0, 0.0, 0.0],            "max": [12.0, 8.0, 7.4]          },          "provenance": [            {              "mode": "geometric_inference",              "source_ids": ["scan_001"],              "algorithm": "plane_graph_baseline",              "version": "0.2.0"            }          ]        }      ],      "provenance": [        {          "mode": "fusion",          "source_ids": ["scan_001"],          "evidence_ids": ["partition_88", "partition_89"],          "algorithm": "building_grouping_v0"        }      ],      "attributes": {}    },    {      "id": "wall_4",      "kind": "boundary",      "class": "WallSurface",      "semantic_resolution": "part",      "epistemic_state": "inferred",      "structural_roles": ["surface_interior", "convex_edge", "roof_junction"],      "confidence": {        "overall": 0.84,        "geometry": 0.89,        "semantics": 0.83,        "topology": 0.78,        "observability": 0.41      },      "observation_support": [        {          "observation_id": "scan_001",          "point_count": 94,          "visibility_fraction": 0.37,          "support": "direct_return"        }      ],      "geometry": [],      "provenance": [        {          "mode": "geometric_inference",          "source_ids": ["scan_001"],          "algorithm": "plane_graph_baseline"        }      ],      "attributes": {        "orientation": "vertical"      }    }  ],  "relations": [    {      "id": "rel_wall4_building17",      "type": "part_of",      "source": "wall_4",      "target": "building_17",      "confidence": 0.98,      "provenance": [        {          "mode": "geometric_inference",          "algorithm": "hierarchy_builder_v0"        }      ]    }  ],  "observations": [    {      "id": "scan_001",      "modality": "lidar",      "uri": "observations/scan_001.laz",      "frame": "local_enu"    }  ],  "alternatives": []}
+28. Final directive
+Build the smallest real system that proves the architecture, not the largest demo that hides whether the architecture works.
+The order of importance is:
+1. reproducible observations2. correct geometry evidence3. stable semantic identity4. hierarchy and relations5. provenance and uncertainty6. physical closure7. theme/materialization8. scaling/runtime9. photorealism
+A successful first release should let us point to one reconstructed entity and answer, programmatically:
+What is it?What larger object is it part of?What geometry supports that conclusion?What is it adjacent to / connected to?Which observation(s) support it?Was it observed, inferred, imported, or generated?How confident are we?What alternative hypotheses existed?Can it be compiled to another engine or style without changing its identity?Can the compiled world reproduce the observations that caused us to infer it?
+If the software can answer those questions, the Spatial World Compiler exists in a meaningful sense.
+END OF IMPLEMENTATION HANDOFF
