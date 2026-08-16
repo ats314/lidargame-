@@ -119,14 +119,15 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 136 tests, ~3s
+python -m pytest tests/ -q                    # 142 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
 lidarworld fetch denver_lodo -o data/real     # pull a real 3DEP tile
 lidarworld tiles data/real --area x,y,size    # header-only index; what covers this?
-lidarworld compile data/real/*.laz -o build/x --bbox minx,miny,maxx,maxy \
-  --theme victorian --theme neon --sir
+lidarworld compile data/real --area x,y,size -o build/x \
+  --footprints denver --streets denver --theme victorian --theme neon --sir
+python tools/shoot.py --out build/shots        # render it and LOOK at it
 lidarworld validate build/x/x.lwir --scan scan.bin
 ```
 
@@ -161,6 +162,11 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    little. Needs footprint-based grouping, not just patch adjacency.
 7. **Highlighting terrain tints the whole world**, because terrain is a single
    node. Scope the viewer's highlight to a face.
+8. **Look at the render before believing a metric.** Every number can be fine
+   while the world looks like nothing. `tools/shoot.py` drives headless Chromium
+   over the viewer and writes PNGs; it is how the fog was found drowning the
+   block at 63% opacity by 100 m, and how 1,315 phantom roof "windows" were
+   spotted as pink speckle. Neither showed up in any metric.
 
 ## Things that wasted time before
 
