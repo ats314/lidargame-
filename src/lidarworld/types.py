@@ -271,6 +271,9 @@ class World:
         self.nodes: dict[str, Node] = {}
         self.edges: list[Edge] = []
         self.sources: list[Source] = []
+        #: Generative programs whose execution produced part of this world.
+        #: The parameters, not the geometry -- see ir/program.py.
+        self.programs: list[Any] = []
         self.stages: list[StageRecord] = []
         self.arrays: dict[str, np.ndarray] = {}
         self.points: PointCloud | None = None

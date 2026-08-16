@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..ir import program as program_ir
 from ..segment.planes import PlanarPatch, plane_frame
 
 UP = np.array([0.0, 0.0, 1.0])
@@ -88,10 +89,15 @@ def roof_height(patches, group: list[int], cloud) -> float | None:
 
 
 def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
-          min_height: float = 2.5, start_id: int = 0) -> list[PlanarPatch]:
-    """Extrude every footprint that has a measured roof above it."""
+          min_height: float = 2.5, start_id: int = 0):
+    """Extrude every footprint that has a measured roof above it.
+
+    Returns (walls, programs). The programs are the generative description
+    the walls came out of -- a ring and two heights each -- kept so the
+    envelope can be re-executed rather than only rendered.
+    """
     if not len(rings):
-        return []
+        return [], []
 
     by_footprint: dict[int, list[int]] = {}
     for i, f in enumerate(assignment):
@@ -99,6 +105,7 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
             by_footprint.setdefault(int(f), []).append(i)
 
     walls: list[PlanarPatch] = []
+    programs = []
     for f, group in by_footprint.items():
         top = roof_height(patches, group, cloud)
         if top is None:
@@ -108,5 +115,16 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
         base = float(np.nan_to_num(raster.sample_bilinear(dtm, centre)[0]))
         if top - base < min_height:
             continue
-        walls.extend(walls_from_footprint(ring, base, top, start_id=start_id + len(walls)))
-    return walls
+        new = walls_from_footprint(ring, base, top, start_id=start_id + len(walls))
+        # The parameters are the point. Executing them produced `new`, and
+        # keeping them is what lets a wall lost to a crop or an occlusion be
+        # regenerated instead of predicted.
+        program = program_ir.extrusion(f"bldg.{f:04d}", ring, base, top,
+                                       roof="flat", source="footprint")
+        program.notes = (f"{len(new)} walls from {program.cost} parameters; "
+                         "roof form not inferred, so the envelope is a prism")
+        for patch in new:
+            patch.attrs["program"] = program.id
+        programs.append(program)
+        walls.extend(new)
+    return walls, programs

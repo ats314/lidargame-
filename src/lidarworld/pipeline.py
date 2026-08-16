@@ -248,11 +248,16 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
     if config.extrude_walls and footprint_rings:
         with world.stage("extrude", source=config.footprints) as rec:
             assignment = footprint_stage.assign_patches(patches, footprint_rings)
-            new_walls = extrude_stage.build(footprint_rings, assignment, patches,
-                                            cloud, raster, dtm, start_id=len(patches))
+            new_walls, programs = extrude_stage.build(
+                footprint_rings, assignment, patches, cloud, raster, dtm,
+                start_id=len(patches))
             patches.extend(new_walls)
+            world.programs.extend(programs)
+            params = sum(p.cost for p in programs)
+            rec.params["programs"] = {"count": len(programs), "parameters": params}
             rec.notes = (f"{len(new_walls)} walls extruded from "
-                         f"{len(footprint_rings)} footprints")
+                         f"{len(footprint_rings)} footprints "
+                         f"({len(programs)} programs, {params} parameters)")
         _log(config, rec.notes)
 
     # --- tile lattices ----------------------------------------------------
@@ -265,6 +270,7 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                 if config.gate_free_space else None)
         gated_cells = 0
         gated_patches: set[int] = set()
+        program_residual: dict[str, list[int]] = {}
         for patch in patches:
             if patch.attrs.get("extruded"):
                 lat = lattice_stage.build_solid(
@@ -273,6 +279,13 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                 if free is not None:
                     cleared, rejected = freespace.gate_lattice(lat, patch, free)
                     gated_cells += cleared
+                    # The residual belongs to the program, not the wall: it is
+                    # the D(O, S(E(W))) term for the parameters that made it.
+                    key = patch.attrs.get("program")
+                    if key is not None:
+                        before, after = program_residual.setdefault(key, [0, 0])
+                        program_residual[key] = [before + cleared,
+                                                 after + cleared + lat.solid_count]
                     if rejected:
                         gated_patches.add(patch.id)
                         continue
@@ -297,6 +310,10 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             rec.notes += (f" ({gated_cells:,} synthesised cells and "
                           f"{len(gated_patches)} surfaces rejected as free space)")
             patches = [p for p in patches if p.id not in gated_patches]
+        for program in world.programs:
+            bad, total = program_residual.get(program.id, [0, 0])
+            if total:
+                program.residual = bad / total
     _log(config, rec.notes)
 
     # --- topology ---------------------------------------------------------
