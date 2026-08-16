@@ -15,15 +15,9 @@ from pathlib import Path
 
 import numpy as np
 
+from ..semantics.vocab import ASPRS
 from ..types import PointCloud, Source
 from .base import IngestResult, register, remap
-
-#: ASPRS standard classification codes -> canonical semantics.
-ASPRS = {
-    2: "ground", 3: "vegetation_low", 4: "vegetation_low", 5: "vegetation_high",
-    6: "building", 7: "noise", 9: "water", 10: "ground", 11: "road",
-    13: "wire", 14: "wire", 15: "pole", 16: "wire", 17: "bridge", 18: "noise",
-}
 
 _POINT_RECORD_LENGTHS = {0: 20, 1: 28, 2: 26, 3: 34, 4: 57, 5: 63, 6: 30, 7: 36, 8: 38, 9: 59, 10: 67}
 

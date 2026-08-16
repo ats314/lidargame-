@@ -1,9 +1,16 @@
-"""Licence hygiene. A source only ships if it can be used commercially."""
+"""Catalogue hygiene.
+
+Terms are *recorded*, not enforced: every source is reachable, and each one
+carries an accurate licence line and a commercial flag so the constraint is
+visible where it is used. What must not happen is a source whose terms are
+silently wrong or missing.
+"""
 from __future__ import annotations
 
 import pytest
 
-from lidarworld.data import COMMERCIAL, PLACES, RESTRICTED, commercial_sources, describe
+from lidarworld.data import (COMMERCIAL, NONCOMMERCIAL, PLACES, RESTRICTED, SOURCES,
+                             all_sources, commercial_sources, describe)
 
 
 def test_every_listed_source_is_commercial_and_attributable():
@@ -15,20 +22,40 @@ def test_every_listed_source_is_commercial_and_attributable():
         assert source.homepage.startswith("http")
 
 
-def test_non_commercial_datasets_are_excluded_with_a_reason():
-    # These are the well-known ones it would be easy to reach for by habit.
-    for dataset in ("kitti", "semantickitti", "nuscenes", "waymo_open"):
-        assert dataset in RESTRICTED
-        assert "non-commercial" in RESTRICTED[dataset].lower() or "no derivatives" in RESTRICTED[dataset].lower()
-    assert not (set(RESTRICTED) & set(COMMERCIAL))
+def test_restricted_datasets_carry_their_actual_terms():
+    # The well-known ones it would be easy to reach for without checking.
+    for dataset in ("kitti", "semantickitti", "nuscenes", "waymo_open", "dales",
+                    "toronto_3d", "paris_lille_3d", "a2d2", "argoverse"):
+        source = describe(dataset)
+        assert source.commercial is False
+        assert ("non-commercial" in source.license.lower()
+                or "no derivative" in source.license.lower()), source.license
+        assert source.attribution, f"{dataset} has no attribution string"
+    assert not (set(NONCOMMERCIAL) & set(COMMERCIAL))
+    assert set(SOURCES) == set(COMMERCIAL) | set(NONCOMMERCIAL)
+    assert RESTRICTED.keys() == NONCOMMERCIAL.keys()
 
 
-def test_describe_refuses_restricted_sources():
-    with pytest.raises(ValueError, match="excluded on licence grounds"):
-        describe("semantickitti")
+def test_describe_hands_back_every_source_with_its_terms():
+    """Licence calls belong to the owner, so lookup records rather than refuses."""
+    for source in all_sources():
+        assert describe(source.id) is source
+        assert source.license and source.license != "unknown"
+    assert describe("usgs_3dep").commercial is True
+    assert describe("semantickitti").commercial is False
     with pytest.raises(KeyError):
         describe("not_a_source")
-    assert describe("usgs_3dep").commercial
+
+
+def test_labelled_sources_name_a_vocabulary_that_exists():
+    from lidarworld.semantics.vocab import VOCABULARIES
+
+    labelled = [s for s in all_sources() if s.vocabulary]
+    assert {s.id for s in labelled} >= {"dales", "toronto_3d", "paris_lille_3d",
+                                        "semantickitti", "nuscenes"}
+    for source in labelled:
+        assert source.vocabulary in VOCABULARIES, source.id
+        assert source.fmt, f"{source.id} names a vocabulary but no reader"
 
 
 def test_places_point_at_commercial_sources_with_sane_bboxes():
