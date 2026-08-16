@@ -86,10 +86,30 @@ def infer(cloud: PointCloud, *, overwrite: bool = False) -> PointCloud:
     roof = (verticality < 0.35) & (planarity > 0.5) & (hag > 2.5)
     assign(wall | roof, "building", 0.7)
 
-    # Scattered volume -> vegetation, split by height.
+    # Scattered volume -> vegetation. Shape alone is a bad test: at airborne
+    # densities a noisy roof or a parapet is "scattered" too, which is how a
+    # 74 m high-rise ends up labelled a tree. Return structure separates them --
+    # a pulse through a canopy comes back several times, one off a roof comes
+    # back once -- so where the sensor recorded it, it is the primary evidence
+    # and shape only has to agree weakly.
     scattered = sphericity > 0.13
-    assign(scattered & (hag > 2.0), "vegetation_high", 0.65)
-    assign(scattered & (hag > 0.35), "vegetation_low", 0.6)
+    num_returns = cloud.get("num_returns")
+    if num_returns is not None and int(np.max(num_returns, initial=0)) > 1:
+        penetrated = num_returns > 1
+        # Measured on the Denver 3DEP tile, confident roof vs confident scatter:
+        # multi-return 9.3% vs 70.7%. Canopy is where the pulse got through.
+        canopy = scattered & penetrated
+        assign(canopy & (hag > 2.0), "vegetation_high", 0.75)
+        assign(canopy & (hag > 0.35), "vegetation_low", 0.65)
+        # Single-return scatter high up is building clutter -- parapets, plant
+        # rooms, rooftop HVAC -- not a tree. This is the branch that matters:
+        # letting it fall through to vegetation is what turns a 74 m high-rise
+        # into a 74 m tree.
+        assign(scattered & (hag > 2.5), "building", 0.45)
+        assign(scattered & (hag > 0.35), "vegetation_low", 0.4)
+    else:
+        assign(scattered & (hag > 2.0), "vegetation_high", 0.65)
+        assign(scattered & (hag > 0.35), "vegetation_low", 0.6)
 
     # Compact, low, semi-planar blobs sitting on the ground -> vehicles.
     assign((hag > 0.3) & (hag < 2.6) & (planarity > 0.3) & (density > 1.0), "vehicle", 0.4)

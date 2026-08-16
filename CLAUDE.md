@@ -113,7 +113,7 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 91 tests, ~4s
+python -m pytest tests/ -q                    # 99 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
@@ -143,8 +143,13 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    ~4 pts/m2 from above, two thirds of it on pavement, so facades are absent
    rather than sparse. `--footprints <id>` extrudes them from the footprint to
    the measured roof height. Denver went from 50 walls to 872.
-5. **Vegetation over-segments.** 3660 "trees" in a 500 m Denver block. Canopy
-   local maxima are too sensitive.
+5. ~~**Vegetation over-segments.**~~ Fixed. Was 1197 "trees" in a 300 m Denver
+   block with a 74 m maximum; now 307 with a 28.9 m maximum. Three causes, all
+   real: return number was discarded at ingest (it is *the* canopy discriminator
+   -- roof 9.3% multi-return vs scatter 70.7%), the CHM was unsmoothed with a
+   fixed 3x3 window, and there was no suppression between neighbouring peaks.
+   The remaining count is still probably high; there is no airborne ground truth
+   in the repo to check it against, which is what DALES is for.
 6. **Topology barely groups.** 1411 patches became 1184 "structures" — almost
    no merging. Airborne roof patches rarely touch, so `relate_patches` finds
    little. Needs footprint-based grouping, not just patch adjacency.

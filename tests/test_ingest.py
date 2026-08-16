@@ -40,12 +40,17 @@ def test_las_builtin_reader_matches_laspy(tmp_path):
     path = write_las(tmp_path / "t.las", xyz, np.full(200, 0.5, np.float32),
                      np.full(200, 2, np.uint8))
 
-    native_xyz, _, native_class, header = _read_native(path)
+    native_xyz, _, native_class, (native_rn, native_nr), header = _read_native(path)
     with laspy.open(str(path)) as fh:
         las = fh.read()
     assert np.allclose(native_xyz[:, 0], np.asarray(las.x), atol=1e-6)
     assert np.array_equal(native_class, np.asarray(las.classification))
     assert header["point_format"] == 3
+    # Return structure is vegetation evidence, so both readers must decode the
+    # packed byte identically -- and a baked tile is single-return by construction.
+    assert np.array_equal(native_rn, np.asarray(las.return_number))
+    assert np.array_equal(native_nr, np.asarray(las.number_of_returns))
+    assert set(native_nr.tolist()) == {1}
 
 
 def test_las_drops_noise_class(tmp_path):
