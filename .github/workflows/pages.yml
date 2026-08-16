@@ -29,7 +29,7 @@ jobs:
       - name: Compile a block of it into the viewer
         run: |
           lidarworld compile data/real/*.laz -o viewer/world -n denver_lodo \
-            --bbox 499900,4400200,500250,4400550 --tile 0.4 \
+            --crop 350 --tile 0.4 \
             --theme survey --theme victorian --theme neon --sir
           rm -f viewer/world/*.lwir
           du -sh viewer/world

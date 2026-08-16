@@ -64,6 +64,10 @@ class Config:
     #: (minx, miny, maxx, maxy) in the source CRS. Real tiles are typically
     #: 1.5 km square and a city block is what you actually want to walk.
     bbox: tuple[float, float, float, float] | None = None
+    #: Centred square crop, in metres. Unlike `bbox` this needs no knowledge of
+    #: the tile's CRS or extent, so it survives being pointed at whichever tile
+    #: a fetch happens to return.
+    crop_m: float | None = None
     verbose: bool = True
     extras: dict = field(default_factory=dict)
 
@@ -80,19 +84,28 @@ def load_sources(paths, config: Config, adapter: str | None = None,
     for i, path in enumerate(paths):
         result = ingest.load(path, adapter=adapter, source_id=f"src{i}", **(options or {}))
         cloud = result.cloud
-        if config.bbox is not None:
-            minx, miny, maxx, maxy = config.bbox
+        bbox = config.bbox
+        if bbox is None and config.crop_m:
+            lo, hi = cloud.bounds
+            cx, cy = (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2
+            half = config.crop_m / 2
+            bbox = (cx - half, cy - half, cx + half, cy + half)
+        if bbox is not None:
+            minx, miny, maxx, maxy = bbox
             inside = ((cloud.xyz[:, 0] >= minx) & (cloud.xyz[:, 0] <= maxx)
                       & (cloud.xyz[:, 1] >= miny) & (cloud.xyz[:, 1] <= maxy))
             kept = int(inside.sum())
             if kept == 0:
                 lo, hi = cloud.bounds
                 raise ValueError(
-                    f"bbox {config.bbox} selects no points from {path.name}; "
-                    f"that file covers X {lo[0]:.0f}..{hi[0]:.0f}, Y {lo[1]:.0f}..{hi[1]:.0f} "
-                    f"(CRS {result.source.crs or 'unknown'})")
+                    f"bbox {tuple(round(v, 1) for v in bbox)} selects no points from "
+                    f"{Path(path).name}; that file covers "
+                    f"X {lo[0]:.0f}..{hi[0]:.0f}, Y {lo[1]:.0f}..{hi[1]:.0f} "
+                    f"(CRS {result.source.crs or 'unknown'}). Use --crop <metres> to take a "
+                    f"centred block instead of guessing coordinates.")
             cloud = cloud.subset(inside)
-            result.source.notes += f"; cropped to {config.bbox} ({kept:,} of {len(result.cloud):,} points)"
+            result.source.notes += (f"; cropped to {tuple(round(v, 1) for v in bbox)} "
+                                    f"({kept:,} of {len(result.cloud):,} points)")
         if config.decimate > 1:
             cloud = cloud.subset(np.arange(0, len(cloud), config.decimate))
         cloud["source"] = np.full(len(cloud), i, dtype=np.uint8)

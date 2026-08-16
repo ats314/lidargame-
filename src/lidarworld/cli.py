@@ -28,6 +28,7 @@ def _cmd_compile(args) -> int:
         plane_voxel=args.plane_voxel,
         decimate=args.decimate,
         bbox=tuple(float(v) for v in args.bbox.split(",")) if args.bbox else None,
+        crop_m=args.crop,
         detect_openings=not args.no_openings,
         keep_points=not args.no_points,
         verbose=not args.quiet,
@@ -257,6 +258,9 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--terrain-cell", type=float, default=1.0)
     c.add_argument("--plane-voxel", type=float, default=0.6)
     c.add_argument("--decimate", type=int, default=1)
+    c.add_argument("--crop", type=float, default=None,
+                   help="take a centred square of this many metres; needs no CRS "
+                        "knowledge, so it works on whatever tile you were given")
     c.add_argument("--bbox", default=None,
                    help="crop to minx,miny,maxx,maxy in the source CRS "
                         "(a real tile is ~1.5 km square; a block is ~400 m)")
