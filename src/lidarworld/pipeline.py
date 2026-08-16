@@ -53,6 +53,11 @@ class Config:
     min_plane_voxels: int = 12
     #: facade tile size -- this is the resolution of the context mask
     tile: float = 0.25
+    #: Fuse patches that are the same physical surface before tiling them.
+    #: Without this one facade arrives as several ragged patches.
+    merge_coplanar: bool = True
+    #: Carry wall surfaces down to terrain contact, flagged as inferred.
+    extend_walls_to_ground: bool = True
     detect_openings: bool = True
     min_opening_area: float = 0.35
     max_opening_area: float = 14.0
@@ -191,8 +196,12 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         patches = plane_stage.extract(
             cloud, voxel=config.plane_voxel, angle_deg=config.plane_angle_deg,
             dist=config.plane_dist, min_voxels=config.min_plane_voxels)
+        raw_count = len(patches)
+        if config.merge_coplanar:
+            patches = plane_stage.merge_coplanar(patches, cloud)
         plane_stage.assign_patch_channel(cloud, patches)
-        rec.notes = f"{len(patches)} planar patches"
+        rec.notes = (f"{len(patches)} planar patches"
+                     + (f" (merged from {raw_count})" if len(patches) != raw_count else ""))
     _log(config, f"{rec.notes} ({rec.seconds:.1f}s)")
 
     # --- tile lattices ----------------------------------------------------
@@ -204,6 +213,7 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             ground_z = float(np.percentile(pts[:, 2], 2))
             lat = lattice_stage.build(
                 patch, pts, cell=config.tile, ground_z=ground_z,
+                extend_to_ground=config.extend_walls_to_ground,
                 min_opening_area=config.min_opening_area if config.detect_openings else 1e9,
                 max_opening_area=config.max_opening_area)
             lattices[patch.id] = lat
