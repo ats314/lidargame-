@@ -42,10 +42,12 @@ unless depth is requested. Detail belongs in the PR body and in `docs/`.
 ## Ground rules
 
 **Licence: proprietary, all rights reserved.** Never add a permissive licence.
-Never publish to PyPI, npm or any registry. Any third-party input must be clear
-for commercial use or be excluded with the reason recorded in
-`src/lidarworld/data/catalog.py`. `describe()` raises on restricted sources so
-they cannot be wired in by habit — keep it that way.
+Never publish to PyPI, npm or any registry.
+
+**Third-party licences are the owner's call, not yours.** Record what a source's
+terms are in `src/lidarworld/data/catalog.py` and move on — do not gate work on
+them, do not ask, do not refuse a dataset over licence ambiguity. Use the data
+you have unless there is a hard technical reason not to.
 
 **Synthetic data is scaffolding only.** `tools/make_sample_data.py` exists so
 tests and CI run without downloads. It must be labelled as synthetic in every
@@ -124,12 +126,10 @@ lidarworld validate build/x/x.lwir --scan scan.bin
 
 Ranked by how much they hurt, which is roughly the order to fix them.
 
-1. **Facades come out as swiss cheese.** Region growing splits one wall into
-   many patches; each lattice only fills *enclosed* holes, so every patch edge
-   stays ragged and small patches float free. Fix: merge coplanar patches per
-   structure before laying lattices.
-2. **Buildings do not meet the ground.** Wall patches start where the points
-   start. Fix: extend wall bottoms down to terrain contact.
+1. ~~Facades come out as swiss cheese.~~ Fixed: coplanar patches merge per
+   footprint before tiling.
+2. ~~Buildings do not meet the ground.~~ Fixed: wall columns extend to terrain,
+   and footprints are extruded into walls where airborne data has none.
 3. **Forward validation explains ~28% of returns** (Embree backend). 5,421 rays
    hit geometry that is not there and 5,010 pass through geometry that should
    be. Both are real -- swapping the voxel raycaster for exact ray-triangle
@@ -137,9 +137,10 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    and raised explained from 18.5%, which proved most of the old over-occlusion
    was measurement artefact but left this residue as genuine. Symptom of 1 and
    2. This number is the scoreboard; move it.
-4. **Airborne data barely produces walls.** Expected — the sensor sees facades
-   at a glancing angle. Denver gave 1057 roof planes and 23 walls. Use a larger
-   `--tile` on airborne input so lattices are not mostly `sparse_evidence`.
+4. ~~Airborne data barely produces walls.~~ Addressed by extrusion: 3DEP is
+   ~4 pts/m2 from above, two thirds of it on pavement, so facades are absent
+   rather than sparse. `--footprints <id>` extrudes them from the footprint to
+   the measured roof height. Denver went from 50 walls to 872.
 5. **Vegetation over-segments.** 3660 "trees" in a 500 m Denver block. Canopy
    local maxima are too sensitive.
 6. **Topology barely groups.** 1411 patches became 1184 "structures" — almost

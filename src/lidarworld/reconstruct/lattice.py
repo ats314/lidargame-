@@ -386,3 +386,39 @@ def _door_notches(solid: np.ndarray, cell: float, *, min_width: float, max_width
             notches.append((start, u + 1, base, top))
         u += 1
     return notches
+
+
+def build_solid(patch, width: float, height: float, *, cell: float = 0.25,
+                ground_z: float | None = None, interior_depth: int = 3) -> TileLattice:
+    """Lattice for a surface that was synthesised rather than measured.
+
+    Every cell is solid and every cell is flagged OCCLUDED and SPARSE_EVIDENCE.
+    The context mask is still computed properly, so theme rules for corners,
+    ground contact and the top course apply exactly as they do to a measured
+    wall -- the difference is recorded in the evidence flags, not in whether the
+    surface participates.
+    """
+    nu = max(1, int(np.ceil(width / cell)))
+    nv = max(1, int(np.ceil(height / cell)))
+    occupancy = np.ones((nu, nv), dtype=np.uint8)
+    solid = occupancy.astype(bool)
+
+    ctx = np.zeros((nu, nv), dtype=np.uint32)
+    ctx |= Ctx.OCCUPIED | Ctx.OCCLUDED | Ctx.SPARSE_EVIDENCE
+    ctx[0, :] |= Ctx.EDGE_U_MIN
+    ctx[-1, :] |= Ctx.EDGE_U_MAX
+    ctx[:, 0] |= Ctx.EDGE_V_MIN | Ctx.BOTTOM
+    ctx[:, -1] |= Ctx.EDGE_V_MAX | Ctx.TOP
+    ctx[0, :] |= Ctx.CORNER_CONVEX
+    ctx[-1, :] |= Ctx.CORNER_CONVEX
+
+    depth = distance_to_false(np.pad(solid, 1))[1:-1, 1:-1]
+    ctx[depth >= interior_depth] |= Ctx.INTERIOR
+    if ground_z is not None:
+        band = max(1, int(round(0.45 / cell)))
+        ctx[:, :band] |= Ctx.GROUND_CONTACT
+
+    return TileLattice(cell=cell, shape=(nu, nv),
+                       uv_origin=(-width / 2, -height / 2),
+                       occupancy=occupancy, context=ctx,
+                       evidence=np.zeros((nu, nv), dtype=np.uint16), openings=[])

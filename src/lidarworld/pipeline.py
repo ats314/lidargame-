@@ -27,6 +27,7 @@ import numpy as np
 from . import ingest
 from .features import ground as ground_stage
 from .features import neighborhood
+from .reconstruct import extrude as extrude_stage
 from .reconstruct import lattice as lattice_stage
 from .reconstruct import mesh as mesh_stage
 from .reconstruct import terrain as terrain_stage
@@ -59,6 +60,9 @@ class Config:
     merge_coplanar: bool = True
     #: Carry wall surfaces down to terrain contact, flagged as inferred.
     extend_walls_to_ground: bool = True
+    #: Synthesise walls by extruding footprints to measured roof height.
+    #: Airborne LiDAR does not contain facades; this is how a city gets them.
+    extrude_walls: bool = True
     #: Authoritative building footprints: a path to GeoJSON, or a layer id from
     #: lidarworld.data.gis.FOOTPRINTS to fetch for the compiled extent.
     footprints: str | None = None
@@ -235,11 +239,27 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                      + (f" (merged from {raw_count})" if len(patches) != raw_count else ""))
     _log(config, f"{rec.notes} ({rec.seconds:.1f}s)")
 
+    # --- extruded walls ---------------------------------------------------
+    if config.extrude_walls and footprint_rings:
+        with world.stage("extrude", source=config.footprints) as rec:
+            assignment = footprint_stage.assign_patches(patches, footprint_rings)
+            new_walls = extrude_stage.build(footprint_rings, assignment, patches,
+                                            cloud, raster, dtm, start_id=len(patches))
+            patches.extend(new_walls)
+            rec.notes = (f"{len(new_walls)} walls extruded from "
+                         f"{len(footprint_rings)} footprints")
+        _log(config, rec.notes)
+
     # --- tile lattices ----------------------------------------------------
     with world.stage("lattice", tile=config.tile) as rec:
         lattices = {}
         total_openings = 0
         for patch in patches:
+            if patch.attrs.get("extruded"):
+                lattices[patch.id] = lattice_stage.build_solid(
+                    patch, patch.extent[0], patch.extent[1], cell=config.tile,
+                    ground_z=patch.attrs.get("base_z"))
+                continue
             pts = cloud.xyz[patch.point_idx]
             ground_z = float(np.percentile(pts[:, 2], 2))
             lat = lattice_stage.build(
@@ -313,7 +333,11 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         for si, group in enumerate(structures):
             member_patches = [patches[i] for i in group]
             support = sum(p.support for p in member_patches)
-            pts = np.concatenate([cloud.xyz[p.point_idx] for p in member_patches])
+            member_pts = [cloud.xyz[p.point_idx] for p in member_patches
+                          if len(p.point_idx)]
+            member_pts += [topology_stage.patch_corners(p) for p in member_patches
+                           if not len(p.point_idx)]
+            pts = np.concatenate(member_pts)
             lo, hi = pts.min(axis=0), pts.max(axis=0)
             bid = f"bldg.{si:04d}"
             world.add(Node(
