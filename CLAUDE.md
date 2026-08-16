@@ -107,7 +107,8 @@ src/lidarworld/
   themes/       packs, resolver, procedural texture backend
   backends/     web, glTF, CityJSON  <- the only place materials exist
   ir/           .lwir reader/writer, SIR v0.1 exporter
-  data/         licence catalogue, tile fetcher, header-only tile index
+  data/         source catalogue, tile fetcher, header-only tile index,
+                denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
 viewer/         dependency-free WebGL2 walkthrough
@@ -117,7 +118,7 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 115 tests, ~3s
+python -m pytest tests/ -q                    # 128 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear

@@ -28,6 +28,7 @@ from . import ingest
 from .features import ground as ground_stage
 from .features import neighborhood
 from .reconstruct import extrude as extrude_stage
+from .reconstruct import freespace
 from .reconstruct import lattice as lattice_stage
 from .reconstruct import mesh as mesh_stage
 from .reconstruct import terrain as terrain_stage
@@ -63,6 +64,10 @@ class Config:
     #: Synthesise walls by extruding footprints to measured roof height.
     #: Airborne LiDAR does not contain facades; this is how a city gets them.
     extrude_walls: bool = True
+    #: Reject synthesised surfaces standing above the highest return in
+    #: their column -- space the beam demonstrably crossed.
+    gate_free_space: bool = True
+    free_clearance: float = 1.5
     #: Authoritative building footprints: a path to GeoJSON, or a layer id from
     #: lidarworld.data.gis.FOOTPRINTS to fetch for the compiled extent.
     footprints: str | None = None
@@ -254,11 +259,26 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
     with world.stage("lattice", tile=config.tile) as rec:
         lattices = {}
         total_openings = 0
+        # Synthesised surfaces are the compiler's own guesses, so they get
+        # checked against the returns before they are allowed to exist.
+        free = (freespace.FreeSpace(cloud.xyz, raster, clearance=config.free_clearance)
+                if config.gate_free_space else None)
+        gated_cells = 0
+        gated_patches: set[int] = set()
         for patch in patches:
             if patch.attrs.get("extruded"):
-                lattices[patch.id] = lattice_stage.build_solid(
+                lat = lattice_stage.build_solid(
                     patch, patch.extent[0], patch.extent[1], cell=config.tile,
                     ground_z=patch.attrs.get("base_z"))
+                if free is not None:
+                    cleared, rejected = freespace.gate_lattice(lat, patch, free)
+                    gated_cells += cleared
+                    if rejected:
+                        gated_patches.add(patch.id)
+                        continue
+                    if cleared:
+                        patch.attrs["free_space_cleared"] = cleared
+                lattices[patch.id] = lat
                 continue
             pts = cloud.xyz[patch.point_idx]
             ground_z = float(np.percentile(pts[:, 2], 2))
@@ -270,6 +290,13 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             lattices[patch.id] = lat
             total_openings += len(lat.openings)
         rec.notes = f"{sum(l.solid_count for l in lattices.values()):,} tiles, {total_openings} openings"
+        if free is not None and (gated_cells or gated_patches):
+            rec.params["free_space"] = {"cells_cleared": gated_cells,
+                                        "patches_rejected": len(gated_patches),
+                                        "observed_columns": round(free.observed_fraction, 3)}
+            rec.notes += (f" ({gated_cells:,} synthesised cells and "
+                          f"{len(gated_patches)} surfaces rejected as free space)")
+            patches = [p for p in patches if p.id not in gated_patches]
     _log(config, rec.notes)
 
     # --- topology ---------------------------------------------------------
