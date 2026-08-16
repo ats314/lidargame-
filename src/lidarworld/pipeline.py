@@ -35,6 +35,7 @@ from .roles.taxonomy import Ctx, ROLE_INDEX
 from .segment import instances as instance_stage
 from .segment import planes as plane_stage
 from .semantics import infer as semantic_stage
+from .topology import footprints as footprint_stage
 from .topology import graph as topology_stage
 from .types import (SEMANTIC_CLASSES, Geometry, Node, PointCloud, World)
 
@@ -58,6 +59,9 @@ class Config:
     merge_coplanar: bool = True
     #: Carry wall surfaces down to terrain contact, flagged as inferred.
     extend_walls_to_ground: bool = True
+    #: Authoritative building footprints: a path to GeoJSON, or a layer id from
+    #: lidarworld.data.gis.FOOTPRINTS to fetch for the compiled extent.
+    footprints: str | None = None
     detect_openings: bool = True
     min_opening_area: float = 0.35
     max_opening_area: float = 14.0
@@ -245,10 +249,28 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         dtm = terrain_stage.smooth_terrain(dtm, class_raster)
         street = topology_stage.mark_street_facing(
             patches, lattices, raster, terrain_stage.road_mask(class_raster))
-        structures = topology_stage.group_structures(patches, relations)
+        adjacency_groups = topology_stage.group_structures(patches, relations)
+        structures = adjacency_groups
+        footprint_info = ""
+        if config.footprints:
+            rings, foot_attrs = _load_footprints(config.footprints, world, cloud)
+            if not rings:
+                _log(config, f"WARNING: {config.footprints} returned no footprints "
+                             "for this extent; falling back to adjacency grouping")
+            if rings:
+                # Footprints are in the source CRS; the cloud has been shifted.
+                shifted = [r - world.origin[:2] for r in rings]
+                assignment = footprint_stage.assign_patches(patches, shifted)
+                structures = footprint_stage.group_by_footprint(
+                    patches, assignment, adjacency_groups)
+                matched = int((assignment >= 0).sum())
+                footprint_info = (f"; {len(rings)} footprints matched {matched}/"
+                                  f"{len(patches)} patches")
+                rec.params["footprints"] = {"polygons": len(rings), "matched": matched}
+                world.notes["footprint_source"] = config.footprints
         rec.params["relations"] = topology_stage.summarize(relations)
         rec.notes = (f"{len(structures)} structures, {len(relations)} relations, "
-                     f"{street} street-facing patches")
+                     f"{street} street-facing patches{footprint_info}")
     _log(config, rec.notes)
 
     # --- instances --------------------------------------------------------
@@ -403,3 +425,50 @@ def _add_instances(world: World, items, prefix: str, relation: str) -> None:
             attrs={k: (round(float(v), 3) if isinstance(v, (int, float, np.floating)) else v)
                    for k, v in item.attrs.items()}))
         world.link(nid, "terrain", relation, item.confidence)
+
+
+def _load_footprints(spec: str, world: World, cloud: PointCloud):
+    """Resolve `--footprints` to (rings, attributes) in the source CRS."""
+    import json
+
+    from .data.gis import FOOTPRINTS, attributes, fetch_footprints, polygons
+
+    path = Path(spec)
+    if path.exists():
+        geojson = json.loads(path.read_text())
+        layer = FOOTPRINTS.get("denver")
+        return polygons(geojson), (attributes(geojson, layer) if layer else [])
+
+    if spec not in FOOTPRINTS:
+        raise ValueError(f"unknown footprint source {spec!r}; "
+                         f"have {sorted(FOOTPRINTS)} or a path to GeoJSON")
+    layer = FOOTPRINTS[spec]
+
+    try:
+        from pyproj import Transformer
+    except ImportError:
+        raise ImportError(
+            "fetching footprints for an extent needs pyproj to convert the "
+            "cloud's bounds to WGS84: pip install pyproj. Alternatively pass a "
+            "path to a GeoJSON file you have already downloaded.") from None
+    if not world.crs:
+        raise ValueError("the source has no CRS, so its extent cannot be converted "
+                         "to WGS84 to request footprints. Pass a GeoJSON path instead.")
+
+    lo, hi = cloud.bounds
+    lo = lo[:2] + world.origin[:2]
+    hi = hi[:2] + world.origin[:2]
+    to_wgs = Transformer.from_crs(world.crs, "EPSG:4326", always_xy=True)
+    west, south = to_wgs.transform(lo[0], lo[1])
+    east, north = to_wgs.transform(hi[0], hi[1])
+
+    # Request WGS84 and reproject here rather than scraping an EPSG code out of
+    # the WKT: a compound CRS ends with its *vertical* datum, so asking the
+    # server for "the last EPSG code" quietly returns nothing.
+    geojson = fetch_footprints(layer, (west, south, east, north), out_crs="4326")
+    from_wgs = Transformer.from_crs("EPSG:4326", world.crs, always_xy=True)
+    rings = []
+    for ring in polygons(geojson):
+        x, y = from_wgs.transform(ring[:, 0], ring[:, 1])
+        rings.append(np.column_stack([x, y]))
+    return rings, attributes(geojson, layer)

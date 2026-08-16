@@ -60,3 +60,31 @@ def test_point_in_polygon_matches_a_known_square():
     square = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]])
     pts = np.array([[5.0, 5.0], [1.0, 9.0], [-1.0, 5.0], [11.0, 5.0], [5.0, 20.0]])
     assert point_in_polygon(pts, square).tolist() == [True, True, False, False, False]
+
+
+def test_footprint_grouping_beats_adjacency():
+    """Patches sharing a footprint become one building; the rest fall back."""
+    import numpy as np
+
+    from lidarworld.topology.footprints import assign_patches, group_by_footprint
+
+    class FakePatch:
+        def __init__(self, xy):
+            self.centroid = np.array([xy[0], xy[1], 0.0])
+
+    def square(x0, y0, side):
+        return np.array([[x0, y0], [x0 + side, y0], [x0 + side, y0 + side],
+                         [x0, y0 + side], [x0, y0]], dtype=float)
+
+    # Two buildings and one patch outside every footprint.
+    patches = [FakePatch((5, 5)), FakePatch((7, 8)), FakePatch((25, 25)), FakePatch((99, 99))]
+    rings = [square(0, 0, 10), square(20, 20, 10)]
+
+    assignment = assign_patches(patches, rings)
+    assert assignment.tolist() == [0, 0, 1, -1]
+
+    # Adjacency alone would have called all four one blob.
+    groups = group_by_footprint(patches, assignment, fallback=[[0, 1, 2, 3]])
+    assert sorted(sorted(g) for g in groups) == [[0, 1], [2], [3]]
+    # Every patch appears exactly once.
+    assert sorted(i for g in groups for i in g) == [0, 1, 2, 3]

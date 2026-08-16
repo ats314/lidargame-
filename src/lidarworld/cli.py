@@ -29,6 +29,7 @@ def _cmd_compile(args) -> int:
         decimate=args.decimate,
         bbox=tuple(float(v) for v in args.bbox.split(",")) if args.bbox else None,
         crop_m=args.crop,
+        footprints=args.footprints,
         detect_openings=not args.no_openings,
         keep_points=not args.no_points,
         verbose=not args.quiet,
@@ -259,6 +260,9 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--terrain-cell", type=float, default=1.0)
     c.add_argument("--plane-voxel", type=float, default=0.6)
     c.add_argument("--decimate", type=int, default=1)
+    c.add_argument("--footprints", default=None,
+                   help="authoritative building footprints: a GeoJSON path, or a "
+                        "layer id (e.g. 'denver') fetched for the compiled extent")
     c.add_argument("--crop", type=float, default=None,
                    help="take a centred square of this many metres; needs no CRS "
                         "knowledge, so it works on whatever tile you were given")
