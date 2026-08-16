@@ -27,6 +27,7 @@ def _cmd_compile(args) -> int:
         tile=args.tile,
         plane_voxel=args.plane_voxel,
         decimate=args.decimate,
+        bbox=tuple(float(v) for v in args.bbox.split(",")) if args.bbox else None,
         detect_openings=not args.no_openings,
         keep_points=not args.no_points,
         verbose=not args.quiet,
@@ -51,6 +52,12 @@ def _cmd_compile(args) -> int:
                                   include_points=not args.no_points)
     print(f"  web bundle  {web_info['vertices']:,} verts, {web_info['triangles']:,} tris, "
           f"{web_info['points']:,} points, {web_info['bytes'] / 1e6:.1f} MB")
+
+    if args.sir:
+        from .ir.sir import write_document
+        info = write_document(world, out / f"{config.name}.sir.json")
+        print(f"  spatial IR  {info['path']} (SIR v0.1: {info['entities']} entities, "
+              f"{info['relations']} relations, epistemic {info['epistemic']})")
 
     if args.cityjson:
         from .backends import cityjson as cityjson_backend
@@ -175,6 +182,56 @@ def _cmd_roles(args) -> int:
     return 0
 
 
+def _cmd_sources(args) -> int:
+    from .data import PLACES, RESTRICTED, commercial_sources
+
+    print("cleared for commercial use:")
+    for s in commercial_sources():
+        print(f"  {s.id:16s} {s.license}")
+        print(f"  {'':16s} {s.coverage}")
+        print(f"  {'':16s} attribute as: {s.attribution}")
+        if s.notes:
+            print(f"  {'':16s} {s.notes}")
+        print()
+    print("excluded on licence grounds (do not wire these in):")
+    for name, reason in RESTRICTED.items():
+        print(f"  {name:16s} {reason}")
+    print("\nnamed places (lidarworld fetch <id>):")
+    for name, place in PLACES.items():
+        print(f"  {name:20s} {place['description']}")
+    return 0
+
+
+def _cmd_fetch(args) -> int:
+    from .data import PLACES, fetch_place
+    from .data.fetch import resolve_tiles
+
+    if args.place not in PLACES:
+        raise SystemExit(f"unknown place {args.place!r}; try: {', '.join(PLACES)}")
+    place = PLACES[args.place]
+    tiles = resolve_tiles(place["bbox_wgs84"], prefer_project=place.get("project"))
+    print(f"{args.place}: {place['description']}")
+    print(f"{len(tiles)} tiles cover it; taking the {args.max_tiles} newest\n")
+    for tile in tiles[: args.max_tiles]:
+        print(f"  {tile['published']}  {tile['bytes'] / 1e6:7.1f} MB  {tile['title']}")
+    if args.list_only:
+        return 0
+
+    def progress(done, total):
+        if total:
+            print(f"\r    {done / 1e6:7.1f} / {total / 1e6:.1f} MB", end="", flush=True)
+
+    paths = fetch_place(args.place, args.out, max_tiles=args.max_tiles, progress=progress)
+    print()
+    for path in paths:
+        print(f"  -> {path} ({path.stat().st_size / 1e6:.1f} MB)")
+    crop = place.get("suggested_crop")
+    if crop:
+        print(f"\ncompile a block of it:\n  lidarworld compile {paths[0]} -o build/{args.place} "
+              f"\\\n    --bbox {','.join(str(v) for v in crop)} --theme victorian --theme neon --sir")
+    return 0
+
+
 def _cmd_adapters(args) -> int:
     from .ingest import adapters
 
@@ -200,9 +257,15 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--terrain-cell", type=float, default=1.0)
     c.add_argument("--plane-voxel", type=float, default=0.6)
     c.add_argument("--decimate", type=int, default=1)
+    c.add_argument("--bbox", default=None,
+                   help="crop to minx,miny,maxx,maxy in the source CRS "
+                        "(a real tile is ~1.5 km square; a block is ~400 m)")
     c.add_argument("--gltf", action="store_true", help="also export materialised glTF")
     c.add_argument("--cityjson", action="store_true",
                    help="also export CityJSON 1.1 (CityGML semantics)")
+    c.add_argument("--sir", action="store_true",
+                   help="also export Spatial IR v0.1 (spec/schema), with "
+                        "epistemic state derived from measured evidence")
     c.add_argument("--no-openings", action="store_true")
     c.add_argument("--no-textures", action="store_true")
     c.add_argument("--no-points", action="store_true")
@@ -240,6 +303,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("roles", help="print the role taxonomy and context flags")
     r.set_defaults(func=_cmd_roles)
+
+    so = sub.add_parser("sources", help="list LiDAR sources cleared for commercial use")
+    so.set_defaults(func=_cmd_sources)
+
+    f = sub.add_parser("fetch", help="download public-domain tiles covering a named place")
+    f.add_argument("place", help="a place id from `lidarworld sources`")
+    f.add_argument("-o", "--out", default="data/real")
+    f.add_argument("--max-tiles", type=int, default=1)
+    f.add_argument("--list-only", action="store_true")
+    f.set_defaults(func=_cmd_fetch)
 
     a = sub.add_parser("adapters", help="list ingest adapters")
     a.set_defaults(func=_cmd_adapters)

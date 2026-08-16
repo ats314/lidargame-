@@ -23,14 +23,16 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
-      - name: Bake sample scans
-        run: python tools/make_sample_data.py --out data/samples
-      - name: Compile the demo world into the viewer
+      - run: pip install -e ".[dev,laz]"
+      - name: Fetch a public-domain USGS 3DEP tile (Denver LoDo)
+        run: lidarworld fetch denver_lodo -o data/real
+      - name: Compile a block of it into the viewer
         run: |
-          lidarworld compile data/samples/townblock.las -o viewer/world -n townblock \
-            --theme survey --theme victorian --theme neon
+          lidarworld compile data/real/*.laz -o viewer/world -n denver_lodo \
+            --bbox 499900,4400200,500250,4400550 --tile 0.4 \
+            --theme survey --theme victorian --theme neon --sir
           rm -f viewer/world/*.lwir
+          du -sh viewer/world
       # enablement lets the workflow turn Pages on itself. If the repository
       # has never had Pages configured, this is what avoids a manual visit to
       # Settings -> Pages -> Source -> GitHub Actions.

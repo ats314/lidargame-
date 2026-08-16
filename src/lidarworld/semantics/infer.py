@@ -28,7 +28,11 @@ def infer(cloud: PointCloud, *, overwrite: bool = False) -> PointCloud:
     n = len(cloud)
 
     existing = cloud.get("semantic")
-    have_labels = existing is not None and (existing != 0).mean() > 0.5
+    # USGS 3DEP tiles routinely classify only ground and noise and leave
+    # everything else as ASPRS class 1, so a majority test discards a perfectly
+    # good ground classification. Any meaningful labelled minority is worth
+    # keeping -- inference then fills only the unlabelled remainder.
+    have_labels = existing is not None and (existing != 0).mean() > 0.02
     gap = None
     if have_labels and not overwrite:
         # Trust the published classification, but do not leave the leftovers on

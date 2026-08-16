@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/spatial-ir/v0.1/schema.json",
+  "title": "Spatial Intermediate Representation v0.1",
+  "type": "object",
+  "required": ["sir_version", "world", "entities", "relations", "observations"],
+  "properties": {
+    "sir_version": {"const": "0.1.0"},
+    "world": {"$ref": "#/$defs/world"},
+    "entities": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entity"}
+    },
+    "relations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/relation"}
+    },
+    "observations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "alternatives": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/alternative"},
+      "default": []
+    },
+    "metadata": {"type": "object", "additionalProperties": true}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "world": {
+      "type": "object",
+      "required": ["id", "linear_unit", "up_axis", "coordinate_frame"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "linear_unit": {"enum": ["m"]},
+        "up_axis": {"enum": ["Z"]},
+        "coordinate_frame": {"type": "string", "minLength": 1},
+        "crs": {"type": ["string", "null"]},
+        "origin": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "metadata": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "required": ["id", "kind", "class", "semantic_resolution", "epistemic_state", "confidence", "geometry", "provenance"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "kind": {
+          "enum": ["region", "space", "boundary", "opening", "object", "terrain", "transport", "vegetation", "water", "sensor", "logical"]
+        },
+        "class": {"type": "string", "minLength": 1},
+        "semantic_resolution": {
+          "enum": ["macro", "object", "part", "component", "detail"]
+        },
+        "epistemic_state": {
+          "enum": ["observed", "inferred", "generated", "manual", "imported", "hybrid"]
+        },
+        "confidence": {"$ref": "#/$defs/confidence"},
+        "geometry": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/geometry"}
+        },
+        "provenance": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/provenance"}
+        },
+        "attributes": {"type": "object", "additionalProperties": true},
+        "labels": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}}
+      },
+      "additionalProperties": false
+    },
+    "confidence": {
+      "type": "object",
+      "required": ["overall"],
+      "properties": {
+        "overall": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "geometry": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "semantics": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "topology": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+      },
+      "additionalProperties": false
+    },
+    "geometry": {
+      "type": "object",
+      "required": ["id", "representation", "role"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "representation": {
+          "enum": ["primitive", "mesh", "polygon", "solid", "polyline", "point", "point_cloud", "bbox", "external"]
+        },
+        "role": {
+          "enum": ["render", "extent", "collision", "source", "proxy", "analysis"]
+        },
+        "geometric_tolerance_m": {"type": "number", "minimum": 0.0},
+        "primitive": {"$ref": "#/$defs/primitive"},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "uri": {"type": "string"},
+        "format": {"type": "string"},
+        "transform": {"$ref": "#/$defs/transform"},
+        "provenance": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/provenance"}
+        },
+        "metadata": {"type": "object", "additionalProperties": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"representation": {"const": "primitive"}}},
+          "then": {"required": ["primitive"]}
+        },
+        {
+          "if": {"properties": {"representation": {"const": "bbox"}}},
+          "then": {"required": ["bbox"]}
+        },
+        {
+          "if": {"properties": {"representation": {"enum": ["mesh", "polygon", "solid", "polyline", "point", "point_cloud", "external"]}}},
+          "then": {"anyOf": [{"required": ["uri"]}, {"required": ["metadata"]}]}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "primitive": {
+      "type": "object",
+      "required": ["type", "center"],
+      "properties": {
+        "type": {"enum": ["box", "cylinder", "sphere", "plane"]},
+        "center": {"$ref": "#/$defs/vec3"},
+        "size": {"$ref": "#/$defs/vec3"},
+        "radius": {"type": "number", "exclusiveMinimum": 0.0},
+        "height": {"type": "number", "exclusiveMinimum": 0.0},
+        "axis": {"enum": ["X", "Y", "Z"]},
+        "normal": {"$ref": "#/$defs/vec3"},
+        "orientation_wxyz": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "additionalProperties": false
+    },
+    "bbox": {
+      "type": "object",
+      "required": ["min", "max"],
+      "properties": {
+        "min": {"$ref": "#/$defs/vec3"},
+        "max": {"$ref": "#/$defs/vec3"}
+      },
+      "additionalProperties": false
+    },
+    "transform": {
+      "type": "object",
+      "properties": {
+        "translation": {"$ref": "#/$defs/vec3"},
+        "orientation_wxyz": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "scale": {"$ref": "#/$defs/vec3"}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "enum": ["sensor_observation", "geometric_inference", "semantic_inference", "procedural_generation", "manual_authoring", "structured_import", "fusion", "other"]
+        },
+        "source_ids": {"type": "array", "items": {"type": "string"}},
+        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+        "algorithm": {"type": "string"},
+        "version": {"type": "string"},
+        "parameters_hash": {"type": "string"},
+        "timestamp": {"type": "string"},
+        "notes": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "relation": {
+      "type": "object",
+      "required": ["id", "type", "source", "target", "confidence", "provenance"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "provenance": {"type": "array", "items": {"$ref": "#/$defs/provenance"}},
+        "attributes": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": ["id", "modality", "uri", "frame"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "modality": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "minLength": 1},
+        "frame": {"type": "string", "minLength": 1},
+        "sensor_id": {"type": ["string", "null"]},
+        "timestamp": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"]},
+        "calibration": {"type": "object", "additionalProperties": true},
+        "preprocessing": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+        "metadata": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": false
+    },
+    "alternative": {
+      "type": "object",
+      "required": ["id", "candidate_entity_ids"],
+      "properties": {
+        "id": {"type": "string"},
+        "candidate_entity_ids": {"type": "array", "minItems": 2, "items": {"type": "string"}},
+        "probabilities": {
+          "type": "array",
+          "items": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+        },
+        "notes": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "vec3": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

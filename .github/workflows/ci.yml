@@ -22,6 +22,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - name: Unit tests
         run: python -m pytest tests/ -q
+      - name: Spatial IR spec smoke test
+        run: python spec/benchmark/smoke_test.py
 
   numpy-only:
     # The core must work with numpy alone; scipy and laspy are accelerators.
@@ -49,7 +51,16 @@ jobs:
       - name: Compile a world
         run: |
           lidarworld compile data/samples/townblock.las -o build/town -n townblock \
-            --theme survey --theme victorian --theme neon --gltf --cityjson
+            --theme survey --theme victorian --theme neon --gltf --cityjson --sir
+      - name: Spatial IR v0.1 conformance on a compiled world
+        run: |
+          python - <<'EOF'
+          import sys; sys.path.insert(0, "spec")
+          from sir.reference import validate_document
+          d = validate_document("build/town/townblock.sir.json",
+                                "spec/schema/spatial_ir_v0_1.schema.json")
+          print(f"SIR v0.1 OK: {len(d['entities'])} entities, {len(d['relations'])} relations")
+          EOF
       - name: Forward-validate the street sweep
         run: |
           lidarworld compile data/samples/street.bin -o build/street -n street --theme survey -q
@@ -60,5 +71,6 @@ jobs:
           test -s build/town/world.json
           test -s build/town/townblock.lwir
           test -s build/town/townblock.city.json
+          test -s build/town/townblock.sir.json
           test -s build/town/gltf/townblock.gltf
           for t in survey victorian neon; do test -s "build/town/themes/$t/theme.json"; done

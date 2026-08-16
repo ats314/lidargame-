@@ -219,9 +219,14 @@ def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
     # Doors reach the ground, so they are notches in the silhouette rather
     # than enclosed holes -- the flood fill can never find them. They show up
     # instead as columns whose lowest solid cell sits above the wall's base.
-    for notch in _door_notches(occupancy.astype(bool), cell,
-                               min_width=0.7, max_width=2.6,
-                               min_height=1.5, max_height=3.2):
+    #
+    # Only walls qualify. On a roof the same silhouette test fires on every
+    # ragged eave, which on airborne data turns hundreds of roof planes into
+    # phantom doorways.
+    notches = _door_notches(occupancy.astype(bool), cell,
+                            min_width=0.7, max_width=2.6,
+                            min_height=1.5, max_height=3.2) if patch.slope_deg > 55 else []
+    for notch in notches:
         u0, u1, v0, v1 = notch
         cells = np.argwhere(_region_mask(occupancy.shape, u0, u1, v0, v1)
                             & ~occupancy.astype(bool))

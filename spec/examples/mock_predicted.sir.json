@@ -1,0 +1,1197 @@
+{
+  "sir_version": "0.1.0",
+  "world": {
+    "id": "world_demo_block",
+    "name": "SIR Reference Block",
+    "linear_unit": "m",
+    "up_axis": "Z",
+    "coordinate_frame": "local_ENU",
+    "crs": null,
+    "origin": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "metadata": {
+      "purpose": "synthetic_roundtrip_reference"
+    }
+  },
+  "entities": [
+    {
+      "id": "pred_000",
+      "name": "Reference Building",
+      "kind": "space",
+      "class": "Building",
+      "semantic_resolution": "object",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_bldg_extent",
+          "representation": "primitive",
+          "role": "extent",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0.10158223509786869,
+              0.1413963341567384,
+              3.1335497823054643
+            ],
+            "size": [
+              12.130718164570794,
+              7.963243922825276,
+              6.030997170412125
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "render": false,
+        "floors": 2
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_001",
+      "name": "North Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_wall_n",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0.12442548946675996,
+              4.029868327319811,
+              3.0473723561536508
+            ],
+            "size": [
+              12.044478398502815,
+              0.19333574989875224,
+              6.102630116251769
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "orientation": "north"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_002",
+      "name": "South Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_wall_s",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0.02822044111340483,
+              -3.8337502794807645,
+              3.149014562906704
+            ],
+            "size": [
+              11.898398751178188,
+              0.19128506822533817,
+              6.198414048827954
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "orientation": "south"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_003",
+      "name": "East Wall",
+      "kind": "boundary",
+      "class": "UnknownStructure",
+      "semantic_resolution": "part",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_wall_e",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              6.0625169878105085,
+              -0.07706816998493925,
+              3.0370443779053056
+            ],
+            "size": [
+              0.20157661790743686,
+              7.894218024394857,
+              6.206103638080048
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "orientation": "east"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_004",
+      "name": "West Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_wall_w",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -6.14925643389409,
+              -0.08401952923634608,
+              2.8948672540342626
+            ],
+            "size": [
+              0.20362094735163605,
+              8.051783102817256,
+              6.016169624855845
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "orientation": "west"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_005",
+      "name": "Flat Roof",
+      "kind": "boundary",
+      "class": "RoofSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_roof",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -0.05368258742785985,
+              -0.11482947763948462,
+              5.987529162792015
+            ],
+            "size": [
+              12.497904800835576,
+              8.067496785757514,
+              0.2009790349892643
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "roof_type": "flat"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_006",
+      "name": "South Entry Door",
+      "kind": "opening",
+      "class": "Door",
+      "semantic_resolution": "component",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_door",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -0.028280695796249297,
+              -4.21520351800032,
+              0.9692594064237429
+            ],
+            "size": [
+              1.1867959102225296,
+              0.08183096193434657,
+              2.1497354699979176
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "host": "wall_s"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_007",
+      "name": "South Window West",
+      "kind": "opening",
+      "class": "Window",
+      "semantic_resolution": "component",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_win_s1",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -2.9403131986560895,
+              -4.137473587391955,
+              2.2242412011415134
+            ],
+            "size": [
+              1.6264910681117222,
+              0.0810709371037136,
+              1.4264835701874075
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "host": "wall_s"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_008",
+      "name": "South Window East",
+      "kind": "opening",
+      "class": "UnknownStructure",
+      "semantic_resolution": "component",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_win_s2",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              2.899677807162936,
+              -4.307736330267676,
+              2.180389643611092
+            ],
+            "size": [
+              1.5710700382231362,
+              0.07903819592750924,
+              1.4397508343214982
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "host": "wall_s"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_009",
+      "name": "Front Road",
+      "kind": "transport",
+      "class": "Road",
+      "semantic_resolution": "object",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_road",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -0.11611371926530073,
+              -10.063734531113905,
+              0.10466050516911844
+            ],
+            "size": [
+              26.86219645342874,
+              5.825075333570536,
+              0.10047870219274901
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "surface": "asphalt"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "pred_010",
+      "name": "Tree",
+      "kind": "vegetation",
+      "class": "UnknownStructure",
+      "semantic_resolution": "object",
+      "epistemic_state": "inferred",
+      "confidence": {
+        "overall": 0.78,
+        "geometry": 0.8,
+        "semantics": 0.82,
+        "topology": 0.75
+      },
+      "geometry": [
+        {
+          "id": "g_tree_trunk",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "cylinder",
+            "center": [
+              8.948023638921539,
+              -1.1652211989442247,
+              1.7227158751198537
+            ],
+            "radius": 0.35,
+            "height": 3.0,
+            "axis": "Z",
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "g_tree_crown",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "sphere",
+            "center": [
+              8.99033263382914,
+              -1.0255518690278,
+              4.415692779593813
+            ],
+            "radius": 2.0,
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "geometric_inference",
+              "source_ids": [
+                "obs_lidar_reference"
+              ],
+              "algorithm": "mock_reconstructor",
+              "version": "0.1.0"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "geometric_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0",
+          "parameters_hash": "seed-7"
+        }
+      ],
+      "attributes": {
+        "species": "synthetic_generic"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "pred_r_000",
+      "type": "part_of",
+      "source": "pred_001",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_002",
+      "type": "part_of",
+      "source": "pred_003",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_003",
+      "type": "part_of",
+      "source": "pred_004",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_006",
+      "type": "part_of",
+      "source": "pred_007",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_007",
+      "type": "part_of",
+      "source": "pred_008",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_008",
+      "type": "bounds",
+      "source": "pred_001",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_009",
+      "type": "bounds",
+      "source": "pred_002",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_010",
+      "type": "bounds",
+      "source": "pred_003",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_012",
+      "type": "bounds",
+      "source": "pred_005",
+      "target": "pred_000",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_013",
+      "type": "inside",
+      "source": "pred_006",
+      "target": "pred_002",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_014",
+      "type": "inside",
+      "source": "pred_007",
+      "target": "pred_002",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_015",
+      "type": "inside",
+      "source": "pred_008",
+      "target": "pred_002",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_016",
+      "type": "adjacent_to",
+      "source": "pred_001",
+      "target": "pred_003",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_017",
+      "type": "adjacent_to",
+      "source": "pred_003",
+      "target": "pred_001",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_018",
+      "type": "adjacent_to",
+      "source": "pred_003",
+      "target": "pred_002",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_019",
+      "type": "adjacent_to",
+      "source": "pred_002",
+      "target": "pred_003",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_020",
+      "type": "adjacent_to",
+      "source": "pred_002",
+      "target": "pred_004",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_021",
+      "type": "adjacent_to",
+      "source": "pred_004",
+      "target": "pred_002",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_022",
+      "type": "adjacent_to",
+      "source": "pred_004",
+      "target": "pred_001",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "pred_r_023",
+      "type": "adjacent_to",
+      "source": "pred_001",
+      "target": "pred_004",
+      "confidence": 0.72,
+      "provenance": [
+        {
+          "mode": "semantic_inference",
+          "source_ids": [
+            "obs_lidar_reference"
+          ],
+          "algorithm": "mock_reconstructor",
+          "version": "0.1.0"
+        }
+      ],
+      "attributes": {}
+    }
+  ],
+  "observations": [
+    {
+      "id": "obs_lidar_reference",
+      "modality": "lidar",
+      "uri": "scan_reference.npz",
+      "frame": "local_ENU",
+      "sensor_id": "rtx_lidar_01",
+      "timestamp": null,
+      "sha256": null,
+      "calibration": {
+        "simulator": "Isaac Sim 6.0.1",
+        "config": "Example_Rotary"
+      },
+      "preprocessing": [],
+      "metadata": {
+        "ground_truth_object_ids": "evaluation_only"
+      }
+    }
+  ],
+  "alternatives": [],
+  "metadata": {
+    "benchmark_track": "synthetic_inverse_forward_closure_v0.1",
+    "warning": "mock perturbation baseline; not a reconstructor"
+  }
+}
