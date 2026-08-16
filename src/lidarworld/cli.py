@@ -94,6 +94,7 @@ def _cmd_compile(args) -> int:
         bbox=bbox,
         crop_m=args.crop,
         footprints=args.footprints,
+        streets=args.streets,
         detect_openings=not args.no_openings,
         keep_points=not args.no_points,
         verbose=not args.quiet,
@@ -375,6 +376,9 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--terrain-cell", type=float, default=1.0)
     c.add_argument("--plane-voxel", type=float, default=0.6)
     c.add_argument("--decimate", type=int, default=1)
+    c.add_argument("--streets", default=None,
+                   help="street network for the carriageway: 'denver' or a path to "
+                        "GeoJSON. Intensity finds under 6% of a downtown grid.")
     c.add_argument("--footprints", default=None,
                    help="authoritative building footprints: a GeoJSON path, or a "
                         "layer id (e.g. 'denver') fetched for the compiled extent")

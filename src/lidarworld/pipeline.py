@@ -64,6 +64,10 @@ class Config:
     #: Synthesise walls by extruding footprints to measured roof height.
     #: Airborne LiDAR does not contain facades; this is how a city gets them.
     extrude_walls: bool = True
+    #: Promote terrain under the published street network to carriageway.
+    #: Intensity finds under 6% of a downtown grid; the network is
+    #: authoritative and Denver publishes it.
+    streets: str | None = None
     #: Reject synthesised surfaces standing above the highest return in
     #: their column -- space the beam demonstrably crossed.
     gate_free_space: bool = True
@@ -298,7 +302,14 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             lat = lattice_stage.build(
                 patch, pts, cell=config.tile, ground_z=ground_z,
                 extend_to_ground=config.extend_walls_to_ground,
-                min_opening_area=config.min_opening_area if config.detect_openings else 1e9,
+                # Openings are a facade phenomenon: glass returns nothing at
+                # 905 nm, so an enclosed hole in a wall's returns is a window.
+                # An enclosed hole in a *roof* is a scan shadow or a rooftop
+                # plant occlusion, and calling it a window speckles every roof
+                # in the block with window trim.
+                min_opening_area=(config.min_opening_area
+                                  if config.detect_openings and patch.role.startswith(
+                                      "surface.wall") else 1e9),
                 max_opening_area=config.max_opening_area)
             lattices[patch.id] = lat
             total_openings += len(lat.openings)
@@ -321,6 +332,12 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         relations = topology_stage.relate_patches(patches, cloud)
         topology_stage.annotate_cross_patch_context(patches, lattices, relations, cloud)
         class_raster, coverage = terrain_stage.classify_cells(cloud, raster, dtm)
+        if config.streets:
+            info = _apply_streets(config.streets, world, cloud, raster, class_raster)
+            rec.params["streets"] = info
+            _log(config, f"street network promoted {info['promoted']:,} terrain cells "
+                         f"to carriageway ({info['road_cells_before']:,} -> "
+                         f"{info['road_cells_after']:,})")
         dtm = terrain_stage.smooth_terrain(dtm, class_raster)
         street = topology_stage.mark_street_facing(
             patches, lattices, raster, terrain_stage.road_mask(class_raster))
@@ -546,3 +563,55 @@ def _load_footprints(spec: str, world: World, cloud: PointCloud):
         x, y = from_wgs.transform(ring[:, 0], ring[:, 1])
         rings.append(np.column_stack([x, y]))
     return rings, attributes(geojson, layer)
+
+
+def _apply_streets(spec: str, world, cloud, raster, class_raster) -> dict:
+    """Rasterise a street network over the terrain classes. Same fetch path as
+    footprints: a local GeoJSON, or a named municipal service."""
+    import json
+
+    from .data import denver as denver_data
+    from .topology import streets as street_stage
+
+    path = Path(spec)
+    if path.exists():
+        geojson = json.loads(path.read_text())
+    else:
+        if spec not in ("denver",):
+            raise ValueError(f"unknown street source {spec!r}; have 'denver' or "
+                             "a path to GeoJSON")
+        from pyproj import Transformer
+        lo, hi = cloud.bounds
+        lo = lo[:2] + world.origin[:2]
+        hi = hi[:2] + world.origin[:2]
+        to_wgs = Transformer.from_crs(world.crs, "EPSG:4326", always_xy=True)
+        west, south = to_wgs.transform(lo[0], lo[1])
+        east, north = to_wgs.transform(hi[0], hi[1])
+        import urllib.request
+        url = denver_data.query_url(denver_data.LAYERS["street_centerlines"],
+                                    (west, south, east, north), out_crs="4326")
+        request = urllib.request.Request(url, headers={"User-Agent": "lidarworld/0.1"})
+        with urllib.request.urlopen(request, timeout=180) as response:
+            geojson = json.load(response)
+
+    lines = street_stage.polylines(geojson)
+    half = street_stage.widths(geojson)
+    if len(half) != len(lines):
+        half = [5.5] * len(lines)
+    if not path.exists():
+        from pyproj import Transformer
+        from_wgs = Transformer.from_crs("EPSG:4326", world.crs, always_xy=True)
+        converted = []
+        for line in lines:
+            x, y = from_wgs.transform(line[:, 0], line[:, 1])
+            converted.append(np.column_stack([x, y]))
+        lines = converted
+    lines = [line - world.origin[:2] for line in lines]
+
+    mask = street_stage.rasterise(lines, half, raster)
+    info = street_stage.apply(class_raster, mask,
+                              ground=terrain_stage.GROUND, road=terrain_stage.ROAD,
+                              void=terrain_stage.VOID)
+    info["segments"] = len(lines)
+    world.notes["street_source"] = spec
+    return info
