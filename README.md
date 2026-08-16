@@ -129,7 +129,17 @@ should not pretend otherwise.
 The sample tiles are synthetic so the pipeline runs with no downloads, but nothing in it is tuned to them:
 
 - **Airborne** — [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) / [OpenTopography](https://opentopography.org/) LAZ tiles arrive pre-classified with ASPRS codes and in projected metres. Best data-to-world ratio available.
-- **Street level** — [SemanticKITTI](https://semantic-kitti.org/), [nuScenes](https://www.nuscenes.org/), [Paris-Lille-3D](https://npm3d.fr/paris-lille-3d). Dense facades, real per-point labels, known sensor pose for validation.
+- **Street level** — [SemanticKITTI](https://semantic-kitti.org/), [nuScenes](https://www.nuscenes.org/), [Paris-Lille-3D](https://npm3d.fr/paris-lille-3d), [Toronto-3D](https://github.com/WeikaiTan/Toronto-3D). Dense facades, real per-point labels, known sensor pose for validation.
+- **Labelled airborne** — [DALES](https://udayton.edu/engineering/research/centers/vision_lab/research/was_data_analysis_and_processing/dale.php). The only annotated benchmark shot from the air, and therefore the only one that can score this compiler's semantic inference on the kind of data it actually compiles.
+
+Each labelled dataset numbers its classes independently, and the ranges collide — DALES and Toronto-3D are both 0–8 and disagree about what `3` means. Say which one you have:
+
+```bash
+lidarworld sources -v                              # every source and its class list
+lidarworld compile dales_tile.ply --vocab dales -o build/dales
+```
+
+An unrecognised label column is left unmapped with a message rather than guessed at, because a wrong guess silently relabels the whole dataset.
 - **Anything else** — PCD, PLY, XYZ from a robot or CloudCompare. No labels needed; the inference stage earns them from geometry and records its own confidence.
 
 See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for licences and download recipes.
@@ -141,7 +151,7 @@ src/lidarworld/
   ingest/       adapters: LAS/LAZ, KITTI + SemanticKITTI, PCD, PLY, XYZ
   spatial/      sparse voxel indexing and moment aggregation
   features/     multiscale descriptors, terrain, pluggable partitioner
-  semantics/    ASPRS + SemanticKITTI mappings, rule-based inference
+  semantics/    per-dataset label vocabularies, rule-based inference
   roles/        role taxonomy, context bitmask, CityGML alignment
   segment/      planar region growing, tree/vehicle/pole instancing
   reconstruct/  tile lattices, openings, terrain and surface meshing

@@ -42,7 +42,9 @@ unless depth is requested. Detail belongs in the PR body and in `docs/`.
 ## Ground rules
 
 **Licence: proprietary, all rights reserved.** Never add a permissive licence.
-Never publish to PyPI, npm or any registry.
+Never publish to PyPI, npm or any registry. That is about *our* licence; other
+people's terms are recorded, not enforced -- `describe()` hands back every
+source with its `license` line and `commercial` flag, and refuses nothing.
 
 **Third-party licences are the owner's call, not yours.** Record what a source's
 terms are in `src/lidarworld/data/catalog.py` and move on — do not gate work on
@@ -95,7 +97,9 @@ src/lidarworld/
   spatial/      sparse voxel indexing, moment aggregation
   features/     multiscale PCA descriptors, terrain, height above ground,
                 pluggable partitioner seam (voxel default, SPT backend)
-  semantics/    ASPRS + SemanticKITTI mappings, rule-based inference
+  semantics/    vocab.py: one label table per public benchmark (ASPRS,
+                SemanticKITTI, DALES, Toronto-3D, Paris-Lille-3D, nuScenes);
+                infer.py: rule-based inference where labels are absent
   roles/        role taxonomy, context bitmask, CityGML alignment
   segment/      planar region growing, tree/vehicle/pole instancing
   reconstruct/  tile lattices, opening detection, meshing
@@ -113,7 +117,7 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 99 tests, ~3s
+python -m pytest tests/ -q                    # 115 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear

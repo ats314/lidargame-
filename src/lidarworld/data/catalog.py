@@ -1,13 +1,20 @@
-"""Catalogue of LiDAR sources that are free to use commercially.
+"""Catalogue of LiDAR sources the compiler can read.
 
-Every entry here has been chosen on licence first. The rule is strict: if the
-terms do not permit commercial use and redistribution of derived works, it does
-not go in this file -- it goes in ``RESTRICTED`` with the reason, so nobody
-wires it in by accident.
+Every entry records what its terms actually are, in the `license` field, and
+whether those terms clear commercial use, in the `commercial` flag. That record
+is the deliverable -- it is not a gate. Licence decisions belong to whoever owns
+the project, so nothing here refuses to hand back a source, and no stage further
+down asks. Read `license` before shipping something derived from a source.
 
 Bulk data is fetched, never vendored. A single 3DEP tile is ~65 MB and a city
 is thousands of them, so the repository carries the *addresses* and a fetcher;
 `lidarworld fetch` resolves an area of interest into tile URLs and pulls them.
+
+The annotated benchmarks are here for a specific reason. This compiler infers
+semantics from geometry and has no way to check itself: on the Denver tile the
+only published classes are ground and noise, so a wrong vegetation rule is
+invisible. DALES is airborne and labelled, which makes it the one source that
+can score this pipeline's own inference rather than a car's.
 """
 from __future__ import annotations
 
@@ -26,9 +33,13 @@ class Source:
     api: str = ""
     notes: str = ""
     homepage: str = ""
+    #: Key into `lidarworld.semantics.vocab.VOCABULARIES`, when labelled.
+    vocabulary: str = ""
+    #: What `lidarworld.ingest` adapter reads it, when the format is known.
+    fmt: str = ""
 
 
-#: Cleared for commercial use, including derived works.
+#: Terms clear commercial use and derived works.
 COMMERCIAL: dict[str, Source] = {s.id: s for s in [
     Source(
         id="usgs_3dep",
@@ -163,31 +174,158 @@ COMMERCIAL: dict[str, Source] = {s.id: s for s in [
 ]}
 
 
-#: Deliberately excluded. Do not wire these in without re-reading the terms.
-RESTRICTED: dict[str, str] = {
-    "semantickitti": "CC BY-NC-SA 4.0 -- non-commercial only.",
-    "kitti": "CC BY-NC-SA 3.0 -- non-commercial only.",
-    "nuscenes": "CC BY-NC-SA 4.0 -- non-commercial for the full dataset.",
-    "paris_lille_3d": "CC BY-NC-SA 4.0 -- non-commercial only.",
-    "waymo_open": "Custom licence, non-commercial research use.",
-    "argoverse": "CC BY-NC-SA 4.0 -- non-commercial only.",
-    "a2d2": "CC BY-ND 4.0 -- no derivatives, which a compiler necessarily makes.",
-    "toronto_3d": "CC BY-NC 4.0 -- non-commercial only.",
-    "dales": "CC BY-NC-SA 4.0 -- non-commercial only.",
-}
+#: Readable, but the terms restrict commercial use or derived works. Recorded
+#: so the constraint is visible at the point of use, not enforced here.
+NONCOMMERCIAL: dict[str, Source] = {s.id: s for s in [
+    Source(
+        id="dales",
+        name="DALES (Dayton Annotated LiDAR Earth Scan)",
+        license="CC BY-NC-SA 4.0 -- non-commercial, share-alike",
+        commercial=False,
+        attribution="Varney, Asari & Graehling, University of Dayton",
+        coverage="10 km² of Surrey, BC. 505M points, aerial, 8 classes",
+        classified="Hand-labelled: ground, vegetation, cars, trucks, power lines, "
+                   "fences, poles, buildings",
+        homepage="https://udayton.edu/engineering/research/centers/vision_lab/"
+                 "research/was_data_analysis_and_processing/dale.php",
+        vocabulary="dales",
+        fmt="ply",
+        notes="The only *airborne* labelled benchmark here, and therefore the only "
+              "one that can score this compiler's semantic inference on the kind of "
+              "data it actually compiles. Everything else is a car's point of view. "
+              "Highest-value source in this file for that reason alone.",
+    ),
+    Source(
+        id="toronto_3d",
+        name="Toronto-3D",
+        license="CC BY-NC 4.0 -- non-commercial",
+        commercial=False,
+        attribution="Tan et al., University of Waterloo",
+        coverage="1 km of Avenue Road, Toronto. 78M points, MLS, 8 classes",
+        classified="road, road markings, natural, building, utility line, pole, car, fence",
+        homepage="https://github.com/WeikaiTan/Toronto-3D",
+        vocabulary="toronto_3d",
+        fmt="ply",
+        notes="Street level, so facades are seen head-on rather than at the glancing "
+              "angle airborne data gives. Directly relevant to the wall reconstruction "
+              "weaknesses.",
+    ),
+    Source(
+        id="paris_lille_3d",
+        name="Paris-Lille-3D",
+        license="CC BY-NC-SA 4.0 -- non-commercial, share-alike",
+        commercial=False,
+        attribution="Roynard, Deschaud & Goulette, Mines ParisTech",
+        coverage="2 km of Paris and Lille. 143M points, MLS",
+        classified="Coarse and fine class hierarchy; ground, building, pole, "
+                   "bollard, barrier, pedestrian, car, natural",
+        homepage="https://npm3d.fr/paris-lille-3d",
+        vocabulary="paris_lille_3d",
+        fmt="ply",
+        notes="Dense facades with per-point labels. European street geometry, which "
+              "stresses the theme packs differently from a US grid.",
+    ),
+    Source(
+        id="semantickitti",
+        name="SemanticKITTI",
+        license="CC BY-NC-SA 4.0 -- non-commercial, share-alike",
+        commercial=False,
+        attribution="Behley et al., University of Bonn",
+        coverage="Karlsruhe, 43,552 labelled scans, 28 classes",
+        classified="Full per-point labels including moving/static distinction",
+        homepage="https://semantic-kitti.org/",
+        vocabulary="semantickitti",
+        fmt="kitti",
+        notes="Known sensor pose per scan, which is what forward validation needs to "
+              "mean anything -- comparing a scan against a viewpoint it was not taken "
+              "from measures nothing.",
+    ),
+    Source(
+        id="kitti",
+        name="KITTI raw / odometry",
+        license="CC BY-NC-SA 3.0 -- non-commercial, share-alike",
+        commercial=False,
+        attribution="Geiger, Lenz & Urtasun, KIT and Toyota TI Chicago",
+        coverage="Karlsruhe. Velodyne HDL-64E sweeps with pose",
+        classified="Unlabelled; SemanticKITTI supplies the labels",
+        homepage="https://www.cvlibs.net/datasets/kitti/",
+        fmt="kitti",
+    ),
+    Source(
+        id="nuscenes",
+        name="nuScenes / nuScenes-lidarseg",
+        license="CC BY-NC-SA 4.0 for the full dataset -- non-commercial",
+        commercial=False,
+        attribution="Motional (nuTonomy)",
+        coverage="Boston and Singapore, 1000 scenes, 32-beam",
+        classified="lidarseg: 32 raw classes over 1.4B points",
+        homepage="https://www.nuscenes.org/",
+        vocabulary="nuscenes",
+        fmt="nuscenes",
+        notes="Sparser than KITTI (32 beams vs 64) but two cities and both traffic "
+              "handednesses.",
+    ),
+    Source(
+        id="a2d2",
+        name="Audi A2D2",
+        license="CC BY-ND 4.0 -- no derivative works",
+        commercial=False,
+        attribution="Audi AG",
+        coverage="Germany, 41k labelled frames",
+        classified="Semantic labels projected from camera, 38 classes",
+        homepage="https://www.a2d2.audi/a2d2/en.html",
+        notes="ND is the awkward one: a compiler produces a derivative by definition, "
+              "so this is the least usable of the set regardless of intent. Labels "
+              "come from image projection rather than direct 3D annotation.",
+    ),
+    Source(
+        id="waymo_open",
+        name="Waymo Open Dataset",
+        license="Custom Waymo licence -- non-commercial research use",
+        commercial=False,
+        attribution="Waymo LLC",
+        coverage="US cities, 1150 scenes, 5 sensors",
+        classified="3D semantic segmentation on a labelled subset, 23 classes",
+        homepage="https://waymo.com/open/",
+        notes="TFRecord/protobuf, so reading it needs tensorflow -- a heavier "
+              "dependency than everything else in this project combined. Catalogued "
+              "for completeness; no adapter.",
+    ),
+    Source(
+        id="argoverse",
+        name="Argoverse 2",
+        license="CC BY-NC-SA 4.0 -- non-commercial, share-alike",
+        commercial=False,
+        attribution="Argo AI",
+        coverage="Six US cities, 1000 scenes",
+        classified="3D object annotations; LiDAR is unlabelled per-point",
+        homepage="https://www.argoverse.org/av2.html",
+        notes="Apache Feather/parquet, so reading it needs pyarrow. Object boxes "
+              "rather than per-point labels, which is the wrong shape for this "
+              "compiler's semantics stage.",
+    ),
+]}
+
+#: Every source, whatever the terms. This is the lookup everything else uses.
+SOURCES: dict[str, Source] = {**COMMERCIAL, **NONCOMMERCIAL}
+
+#: Backwards-compatible view: id -> the licence line, for the restricted set.
+RESTRICTED: dict[str, str] = {k: v.license for k, v in NONCOMMERCIAL.items()}
 
 
 def commercial_sources() -> list[Source]:
     return list(COMMERCIAL.values())
 
 
+def all_sources() -> list[Source]:
+    return list(SOURCES.values())
+
+
 def describe(source_id: str) -> Source:
-    if source_id in COMMERCIAL:
-        return COMMERCIAL[source_id]
-    if source_id in RESTRICTED:
-        raise ValueError(
-            f"{source_id} is excluded on licence grounds: {RESTRICTED[source_id]}")
-    raise KeyError(f"unknown source {source_id!r}; have {sorted(COMMERCIAL)}")
+    """Look up a source. Never refuses -- read `.license` and `.commercial`."""
+    if source_id in SOURCES:
+        return SOURCES[source_id]
+    raise KeyError(f"unknown source {source_id!r}; have {sorted(SOURCES)}")
 
 
 #: Pre-resolved areas of interest, so `lidarworld fetch denver_lodo` just works.

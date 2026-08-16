@@ -16,21 +16,11 @@ from pathlib import Path
 
 import numpy as np
 
+#: SemanticKITTI raw ids live in semantics.vocab alongside every other
+#: benchmark's table; re-exported here for callers that expect them here.
+from ..semantics.vocab import SEMANTIC_KITTI
 from ..types import PointCloud, Source
 from .base import IngestResult, register, remap
-
-#: SemanticKITTI raw label ids -> canonical semantics.
-SEMANTIC_KITTI = {
-    10: "vehicle", 11: "vehicle", 13: "vehicle", 15: "vehicle", 16: "vehicle",
-    18: "vehicle", 20: "vehicle", 30: "person", 31: "person", 32: "person",
-    40: "road", 44: "road", 48: "ground", 49: "ground", 50: "building",
-    51: "fence", 52: "building", 60: "road", 70: "vegetation_high",
-    71: "vegetation_high", 72: "vegetation_low", 80: "pole", 81: "pole",
-    99: "unclassified",
-    # 252+ are the "moving" duplicates of the dynamic classes
-    252: "vehicle", 253: "person", 254: "person", 255: "person", 256: "vehicle",
-    257: "vehicle", 258: "vehicle", 259: "vehicle",
-}
 
 MOVING_IDS = frozenset(range(252, 260))
 

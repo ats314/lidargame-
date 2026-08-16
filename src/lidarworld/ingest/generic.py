@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from ..types import PointCloud, Source
-from .base import IngestResult, register
+from .base import IngestResult, register, remap
 
 _PCD_TYPES = {("F", 4): "<f4", ("F", 8): "<f8", ("U", 1): "<u1", ("U", 2): "<u2",
               ("U", 4): "<u4", ("I", 1): "<i1", ("I", 2): "<i2", ("I", 4): "<i4"}
@@ -160,9 +160,60 @@ def load_ply(path: Path, options: dict) -> IngestResult:
     elif "red" in cols:
         rgb = np.column_stack([cols[c] for c in ("red", "green", "blue")]).astype(np.float32)
         cloud["intensity"] = (rgb.mean(axis=1) / 255.0).astype(np.float32)
+
+    label_note = "unlabelled -- semantics will be inferred from geometry"
+    ids = _label_column(cols)
+    if ids is not None:
+        cloud["source_class"] = np.clip(ids, 0, 255).astype(np.uint8)
+        vocab, note = _resolve_vocabulary(ids, options)
+        label_note = note
+        if vocab is not None:
+            from ..semantics.vocab import VOCABULARIES
+            cloud["semantic"] = remap(ids, VOCABULARIES[vocab])
+
     source = Source(id=options.get("source_id", path.stem), uri=str(path),
-                    license=options.get("license", "unknown"), notes=f"PLY {fmt}, {len(props)} properties")
+                    license=options.get("license", "unknown"),
+                    notes=f"PLY {fmt}, {len(props)} properties; {label_note}")
     return IngestResult(cloud, source)
+
+
+#: Names the annotated PLY benchmarks use for their per-point class column.
+_LABEL_NAMES = ("label", "class", "classification", "scalar_label", "scalar_Label",
+                "scalar_class", "semantic", "sem_class", "category")
+
+
+def _label_column(cols: dict) -> np.ndarray | None:
+    for name in _LABEL_NAMES:
+        if name in cols:
+            return np.rint(np.asarray(cols[name], dtype=np.float64)).astype(np.int64)
+    return None
+
+
+def _resolve_vocabulary(ids: np.ndarray, options: dict) -> tuple[str | None, str]:
+    """Pick the class vocabulary, preferring what the caller said over a guess.
+
+    Every benchmark numbered its classes independently and several of the ranges
+    collide outright -- DALES and Toronto-3D are both 0-8 and mean different
+    things by 3. Guessing wrong silently relabels a whole dataset, so an
+    ambiguous file is left unlabelled with a message naming the flag to pass.
+    """
+    from ..semantics.vocab import VOCABULARIES, coverage, detect
+
+    asked = options.get("vocab") or options.get("vocabulary")
+    if asked:
+        if asked not in VOCABULARIES:
+            raise ValueError(f"unknown label vocabulary {asked!r}; "
+                             f"have {sorted(VOCABULARIES)}")
+        got = coverage(asked, np.unique(ids))
+        return asked, (f"{asked} labels ({got:.0%} of ids mapped)" if got > 0.5 else
+                       f"{asked} labels, but only {got:.0%} of ids are in that "
+                       "vocabulary -- check it is the right one")
+    guess, score = detect(ids)
+    if guess is None:
+        return None, ("carries a label column this reader cannot attribute to a "
+                      "dataset; pass --vocab (one of "
+                      f"{', '.join(sorted(VOCABULARIES))}) to use it")
+    return guess, f"{guess} labels, detected ({score:.0%} of ids mapped)"
 
 
 @register("xyz", (".xyz", ".txt", ".csv", ".asc", ".pts"), "ASCII columns: x y z [intensity] [class]")

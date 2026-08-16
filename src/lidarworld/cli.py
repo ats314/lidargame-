@@ -102,7 +102,8 @@ def _cmd_compile(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     print(f"compiling {len(inputs)} source(s) -> {out}")
-    world = compile_world(inputs, config, adapter=args.adapter)
+    world = compile_world(inputs, config, adapter=args.adapter,
+                          ingest_options={"vocab": args.vocab} if args.vocab else None)
 
     ir_path = write_world(world, out / f"{config.name}.lwir")
     print(f"  spatial IR  {ir_path} ({ir_path.stat().st_size / 1e6:.1f} MB)")
@@ -250,20 +251,29 @@ def _cmd_roles(args) -> int:
 
 
 def _cmd_sources(args) -> int:
-    from .data import PLACES, RESTRICTED, commercial_sources
+    from .data import NONCOMMERCIAL, PLACES, commercial_sources
 
-    print("cleared for commercial use:")
-    for s in commercial_sources():
-        print(f"  {s.id:16s} {s.license}")
-        print(f"  {'':16s} {s.coverage}")
-        print(f"  {'':16s} attribute as: {s.attribution}")
-        if s.notes:
-            print(f"  {'':16s} {s.notes}")
+    def show(source):
+        print(f"  {source.id:16s} {source.license}")
+        print(f"  {'':16s} {source.coverage}")
+        print(f"  {'':16s} attribute as: {source.attribution}")
+        if source.vocabulary:
+            print(f"  {'':16s} labelled: --vocab {source.vocabulary}"
+                  + (f", read with the {source.fmt} adapter" if source.fmt else ""))
+        if args.verbose and source.classified:
+            print(f"  {'':16s} classes: {source.classified}")
+        if source.notes:
+            print(f"  {'':16s} {source.notes}")
         print()
-    print("excluded on licence grounds (do not wire these in):")
-    for name, reason in RESTRICTED.items():
-        print(f"  {name:16s} {reason}")
-    print("\nnamed places (lidarworld fetch <id>):")
+
+    print("terms clear commercial use and derived works:\n")
+    for source in commercial_sources():
+        show(source)
+    print("readable, but the terms restrict commercial use or derived works.")
+    print("The constraint is recorded, not enforced -- that call is the owner's:\n")
+    for source in NONCOMMERCIAL.values():
+        show(source)
+    print("named places (lidarworld fetch <id>):")
     for name, place in PLACES.items():
         print(f"  {name:20s} {place['description']}")
     return 0
@@ -357,6 +367,10 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("-t", "--theme", action="append",
                    help="theme pack id or path (repeatable; first is used for glTF)")
     c.add_argument("--adapter", default=None, help="force an ingest adapter")
+    c.add_argument("--vocab", default=None,
+                   help="label vocabulary for a labelled source (dales, toronto_3d, "
+                        "paris_lille_3d, semantickitti, nuscenes, asprs). Ranges collide "
+                        "between datasets, so say which one rather than letting it guess.")
     c.add_argument("--tile", type=float, default=0.25, help="facade tile size in metres")
     c.add_argument("--terrain-cell", type=float, default=1.0)
     c.add_argument("--plane-voxel", type=float, default=0.6)
@@ -420,7 +434,9 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("roles", help="print the role taxonomy and context flags")
     r.set_defaults(func=_cmd_roles)
 
-    so = sub.add_parser("sources", help="list LiDAR sources cleared for commercial use")
+    so = sub.add_parser("sources", help="list LiDAR sources and their terms")
+    so.add_argument("-v", "--verbose", action="store_true",
+                    help="also print each source's class vocabulary")
     so.set_defaults(func=_cmd_sources)
 
     f = sub.add_parser("fetch", help="download public-domain tiles covering a named place")
