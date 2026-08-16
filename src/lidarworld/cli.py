@@ -107,7 +107,8 @@ def _cmd_validate(args) -> int:
     print(f"simulating {min(len(points), args.max_rays):,} rays from "
           f"{np.round(sensor, 2).tolist()} against the reconstruction")
     report = simulate(world, points, sensor, resolution=args.resolution,
-                      tolerance=args.tolerance, max_rays=args.max_rays)
+                      tolerance=args.tolerance, max_rays=args.max_rays,
+                      backend=args.backend)
     print(f"  {report.summary()}")
 
     ranked = sorted(report.per_node.items(), key=lambda kv: kv[1]["fraction"])
@@ -281,7 +282,10 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("world", help="path to a .lwir archive")
     v.add_argument("--scan", required=True, help="the observed scan to compare against")
     v.add_argument("--sensor", default=None, help="sensor position x,y,z in world coordinates")
-    v.add_argument("--resolution", type=float, default=0.25)
+    v.add_argument("--resolution", type=float, default=0.25,
+                   help="voxel size for the fallback backend only")
+    v.add_argument("--backend", default="auto", choices=("auto", "embree", "voxel"),
+                   help="embree is exact (needs Open3D); voxel is the numpy fallback")
     v.add_argument("--tolerance", type=float, default=0.35, help="range agreement in metres")
     v.add_argument("--max-rays", type=int, default=40000)
     v.add_argument("--limit", type=int, default=10)
