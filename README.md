@@ -153,4 +153,10 @@ The sensor, dataset, algorithm and tool index the viewer ships with is generated
 
 ## Licence
 
-MIT. Sample data is generated, not derived from any dataset. Procedural textures are CC0.
+**Copyright (c) 2026 ats314. All rights reserved.** Proprietary — see [LICENSE](LICENSE).
+No permission is granted to use, copy, modify or distribute any part of this
+work without prior written permission.
+
+Sample data is generated, not derived from any dataset. Any LiDAR you process
+remains subject to that data's own licence, which the compiler records in the
+IR and carries through to every export.

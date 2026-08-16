@@ -7,8 +7,9 @@ name = "lidarworld"
 version = "0.2.0"
 description = "Compile LiDAR point clouds into themeable, engine-agnostic playable worlds"
 readme = "README.md"
+classifiers = ["License :: Other/Proprietary License", "Private :: Do Not Upload"]
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Proprietary - All Rights Reserved" }
 dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]

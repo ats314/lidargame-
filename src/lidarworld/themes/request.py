@@ -107,7 +107,7 @@ class MaterialSpec:
     emissive: tuple[float, float, float] = (0.0, 0.0, 0.0)
     opacity: float = 1.0
     scale_m: float = 1.0                # world metres per texture tile
-    license: str = "CC0"
+    license: str = "Proprietary - All Rights Reserved"
     source: str = "procedural (lidarworld)"
     era: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
