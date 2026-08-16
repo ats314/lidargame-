@@ -1,0 +1,23 @@
+# Generated data and builds
+/data/samples/
+/build/
+/viewer/world/
+*.lwir
+*.city.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Node (viewer dev tooling only)
+node_modules/
+package-lock.json
+
+# Local scratch
+shot.mjs
+probe.mjs
+*.png
+!docs/img/*.png
