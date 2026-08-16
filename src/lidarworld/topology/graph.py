@@ -19,7 +19,21 @@ PERPENDICULAR_COS = 0.30      # |n_a . n_b| below this -> treat as perpendicular
 PARALLEL_COS = 0.94
 
 
+def patch_corners(patch) -> np.ndarray:
+    """The four corners of a patch, from its own frame and extent.
+
+    Synthesised walls carry no source points, so anything that needs their
+    extent has to read it from the plane rather than from evidence.
+    """
+    hu, hv = patch.extent[0] / 2, patch.extent[1] / 2
+    return np.array([patch.centroid + su * hu * patch.u + sv * hv * patch.v
+                     for su in (-1, 1) for sv in (-1, 1)])
+
+
 def _aabb(patch, points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    if len(points) == 0:
+        corners = patch_corners(patch)
+        return corners.min(axis=0), corners.max(axis=0)
     return points.min(axis=0), points.max(axis=0)
 
 
@@ -39,6 +53,9 @@ def relate_patches(patches, cloud, *, tol: float = 0.8, max_probe: int = 900):
     for p in patches:
         pts = cloud.xyz[p.point_idx]
         boxes.append(_aabb(p, pts))
+        if len(pts) == 0:
+            probes.append(patch_corners(p))
+            continue
         step = max(1, len(pts) // max_probe)
         probes.append(pts[::step])
 
@@ -115,8 +132,7 @@ def annotate_cross_patch_context(patches, lattices, relations, cloud, *,
                 continue
             other = patches[src]
             pts = cloud.xyz[other.point_idx]
-            step = max(1, len(pts) // max_probe)
-            pts = pts[::step]
+            pts = patch_corners(other) if len(pts) == 0 else pts[::max(1, len(pts) // max_probe)]
             near = np.abs(pts @ patch.normal + patch.offset) < band * 1.6
             if not near.any():
                 continue
