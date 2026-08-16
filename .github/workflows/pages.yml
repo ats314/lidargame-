@@ -37,6 +37,10 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      # .nojekyll keeps the legacy Jekyll builder away from the artifact --
+      # without it, files and directories beginning with an underscore are
+      # silently dropped from the published site.
+      - run: touch viewer/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: viewer
