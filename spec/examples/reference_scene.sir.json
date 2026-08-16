@@ -1,0 +1,1163 @@
+{
+  "sir_version": "0.1.0",
+  "world": {
+    "id": "world_demo_block",
+    "name": "SIR Reference Block",
+    "linear_unit": "m",
+    "up_axis": "Z",
+    "coordinate_frame": "local_ENU",
+    "crs": null,
+    "origin": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "metadata": {
+      "purpose": "synthetic_roundtrip_reference"
+    }
+  },
+  "entities": [
+    {
+      "id": "bldg_01",
+      "name": "Reference Building",
+      "kind": "space",
+      "class": "Building",
+      "semantic_resolution": "object",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_bldg_extent",
+          "representation": "primitive",
+          "role": "extent",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0,
+              0,
+              3
+            ],
+            "size": [
+              12,
+              8,
+              6
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "render": false,
+        "floors": 2
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "wall_n",
+      "name": "North Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_wall_n",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0,
+              4,
+              3
+            ],
+            "size": [
+              12,
+              0.2,
+              6
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "orientation": "north"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "wall_s",
+      "name": "South Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_wall_s",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0,
+              -4,
+              3
+            ],
+            "size": [
+              12,
+              0.2,
+              6
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "orientation": "south"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "wall_e",
+      "name": "East Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_wall_e",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              6,
+              0,
+              3
+            ],
+            "size": [
+              0.2,
+              8,
+              6
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "orientation": "east"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "wall_w",
+      "name": "West Wall",
+      "kind": "boundary",
+      "class": "WallSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_wall_w",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -6,
+              0,
+              3
+            ],
+            "size": [
+              0.2,
+              8,
+              6
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "orientation": "west"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "roof_01",
+      "name": "Flat Roof",
+      "kind": "boundary",
+      "class": "RoofSurface",
+      "semantic_resolution": "part",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_roof",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0,
+              0,
+              6.05
+            ],
+            "size": [
+              12.2,
+              8.2,
+              0.2
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "roof_type": "flat"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "door_01",
+      "name": "South Entry Door",
+      "kind": "opening",
+      "class": "Door",
+      "semantic_resolution": "component",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_door",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0,
+              -4.13,
+              1.1
+            ],
+            "size": [
+              1.2,
+              0.08,
+              2.2
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "host": "wall_s"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "win_s1",
+      "name": "South Window West",
+      "kind": "opening",
+      "class": "Window",
+      "semantic_resolution": "component",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_win_s1",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              -3,
+              -4.13,
+              2.4
+            ],
+            "size": [
+              1.6,
+              0.08,
+              1.4
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "host": "wall_s"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "win_s2",
+      "name": "South Window East",
+      "kind": "opening",
+      "class": "Window",
+      "semantic_resolution": "component",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_win_s2",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              3,
+              -4.13,
+              2.4
+            ],
+            "size": [
+              1.6,
+              0.08,
+              1.4
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "host": "wall_s"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "road_01",
+      "name": "Front Road",
+      "kind": "transport",
+      "class": "Road",
+      "semantic_resolution": "object",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_road",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "box",
+            "center": [
+              0,
+              -10,
+              -0.05
+            ],
+            "size": [
+              28,
+              6,
+              0.1
+            ],
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "surface": "asphalt"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    },
+    {
+      "id": "tree_01",
+      "name": "Tree",
+      "kind": "vegetation",
+      "class": "Tree",
+      "semantic_resolution": "object",
+      "epistemic_state": "generated",
+      "confidence": {
+        "overall": 1.0,
+        "geometry": 1.0,
+        "semantics": 1.0,
+        "topology": 1.0
+      },
+      "geometry": [
+        {
+          "id": "g_tree_trunk",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "cylinder",
+            "center": [
+              9,
+              -1,
+              1.5
+            ],
+            "radius": 0.35,
+            "height": 3.0,
+            "axis": "Z",
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "g_tree_crown",
+          "representation": "primitive",
+          "role": "render",
+          "geometric_tolerance_m": 0.001,
+          "primitive": {
+            "type": "sphere",
+            "center": [
+              9,
+              -1,
+              4.3
+            ],
+            "radius": 2.0,
+            "orientation_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": [
+            {
+              "mode": "procedural_generation",
+              "algorithm": "sir_reference_scene",
+              "version": "0.1.0",
+              "parameters_hash": "reference-fixed"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {
+        "species": "synthetic_generic"
+      },
+      "labels": {
+        "benchmark": "reference"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "r_part_wall_n",
+      "type": "part_of",
+      "source": "wall_n",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_wall_s",
+      "type": "part_of",
+      "source": "wall_s",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_wall_e",
+      "type": "part_of",
+      "source": "wall_e",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_wall_w",
+      "type": "part_of",
+      "source": "wall_w",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_roof_01",
+      "type": "part_of",
+      "source": "roof_01",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_door_01",
+      "type": "part_of",
+      "source": "door_01",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_win_s1",
+      "type": "part_of",
+      "source": "win_s1",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_part_win_s2",
+      "type": "part_of",
+      "source": "win_s2",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_bounds_wall_n",
+      "type": "bounds",
+      "source": "wall_n",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_bounds_wall_s",
+      "type": "bounds",
+      "source": "wall_s",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_bounds_wall_e",
+      "type": "bounds",
+      "source": "wall_e",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_bounds_wall_w",
+      "type": "bounds",
+      "source": "wall_w",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_bounds_roof_01",
+      "type": "bounds",
+      "source": "roof_01",
+      "target": "bldg_01",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_host_door_01",
+      "type": "inside",
+      "source": "door_01",
+      "target": "wall_s",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_host_win_s1",
+      "type": "inside",
+      "source": "win_s1",
+      "target": "wall_s",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_host_win_s2",
+      "type": "inside",
+      "source": "win_s2",
+      "target": "wall_s",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_1",
+      "type": "adjacent_to",
+      "source": "wall_n",
+      "target": "wall_e",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_1b",
+      "type": "adjacent_to",
+      "source": "wall_e",
+      "target": "wall_n",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_2",
+      "type": "adjacent_to",
+      "source": "wall_e",
+      "target": "wall_s",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_2b",
+      "type": "adjacent_to",
+      "source": "wall_s",
+      "target": "wall_e",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_3",
+      "type": "adjacent_to",
+      "source": "wall_s",
+      "target": "wall_w",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_3b",
+      "type": "adjacent_to",
+      "source": "wall_w",
+      "target": "wall_s",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_4",
+      "type": "adjacent_to",
+      "source": "wall_w",
+      "target": "wall_n",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    },
+    {
+      "id": "r_adj_4b",
+      "type": "adjacent_to",
+      "source": "wall_n",
+      "target": "wall_w",
+      "confidence": 1.0,
+      "provenance": [
+        {
+          "mode": "procedural_generation",
+          "algorithm": "sir_reference_scene",
+          "version": "0.1.0",
+          "parameters_hash": "reference-fixed"
+        }
+      ],
+      "attributes": {}
+    }
+  ],
+  "observations": [
+    {
+      "id": "obs_lidar_reference",
+      "modality": "lidar",
+      "uri": "scan_reference.npz",
+      "frame": "local_ENU",
+      "sensor_id": "rtx_lidar_01",
+      "timestamp": null,
+      "sha256": null,
+      "calibration": {
+        "simulator": "Isaac Sim 6.0.1",
+        "config": "Example_Rotary"
+      },
+      "preprocessing": [],
+      "metadata": {
+        "ground_truth_object_ids": "evaluation_only"
+      }
+    }
+  ],
+  "alternatives": [],
+  "metadata": {
+    "benchmark_track": "synthetic_inverse_forward_closure_v0.1"
+  }
+}

@@ -17,7 +17,7 @@ dependencies = ["numpy>=1.24"]
 fast = ["scipy>=1.10"]
 las = ["laspy>=2.5"]
 laz = ["laspy[lazrs]>=2.5"]
-dev = ["pytest>=7", "scipy>=1.10", "laspy>=2.5"]
+dev = ["pytest>=7", "scipy>=1.10", "laspy>=2.5", "jsonschema>=4", "pyproj>=3.4"]
 
 [project.scripts]
 lidarworld = "lidarworld.cli:main"

@@ -1,0 +1,22 @@
+{
+  ".gitignore": "5b9646ed33a1fcbf8c44e2adca567e714e5a3c2929a160d0b151ed2a91771075",
+  "README.md": "7e000d6bce23dd264bd4e51ded6e927657cb0ff7f8e533e2cca6a5af803ceb0b",
+  "RUNBOOK.md": "b271df10f7c9c56cd0a7a777600d4a5d5191398213ac341f6ab0b4a3865d7ee0",
+  "SOURCES.md": "22610a089a04aeae342fcf5bc96c4914e4c8afc9a2027391e4e04eb4babc5af7",
+  "SPEC.md": "7d4814805032bbbe5109bb594abe0b1fec342060cebe93beaf606e44f7349a32",
+  "benchmark/capture_isaacsim_6_0_1.py": "1e435b2482cdd71163e569e1e2a2bd7a091ba7049f311b01680684f89f7bc45d",
+  "benchmark/evaluate_roundtrip.py": "ae68619a0569b148851b77a627032fa3ea9fbf7561d96b72ef66fdcc5f48c51d",
+  "benchmark/make_reference_scene_usd.py": "530405c28e8d3f8cb7efe875aa83e690c7556c03886d41f675afd3e03d09d24e",
+  "benchmark/metrics.py": "4dba794ce85ffb9c6c84af8434419ecb73e08ee40856a5c44bb819b68f75ffc8",
+  "benchmark/mock_reconstructor.py": "11079a24c72233f4485e6320991837839ab427952c582748e1559b7f5f0ac317",
+  "benchmark/smoke_test.py": "c8a3c3347eae6f0cb547ed041eca85447480aea678c16c3b15c413920bb78867",
+  "examples/lidar_poses.json": "acc17449aaf74c7b391cc1d673a02ee638aae37a1897b29f38ac5be214e09127",
+  "examples/mock_metrics.json": "25833654a7f8ebceaa93c91d511d3dedf18705f3c0884c187930042becae7a00",
+  "examples/mock_predicted.sir.json": "2bf0376f895cb1a1859570f9370976d2105d20a2f30ebbfad47f5daac7466148",
+  "examples/reference_scene.sir.json": "bf61db94af79afc0ce384e5af7288caad13b8b62b2dc1bb44155122b1ce63807",
+  "requirements.txt": "3daccb64a613b39ba669939bc9a3d5cc2197dbaaa0623c03c915d597887f36d7",
+  "schema/spatial_ir_v0_1.schema.json": "a7853c4d05f0a654e2765c46e0c8a6944eeef819f6ba5baf620dc66849dd42c7",
+  "sir/__init__.py": "17530abc8b3165c75e99293d38a67697062cc3ca37946e8c81cd2c1959d2d9d2",
+  "sir/reference.py": "38a44d64ce60b61f0711cfe2d705cfb324efbab935e79a92dfd1b6782f7ab098",
+  "tests/test_schema.py": "51a86ca397f96cf5cb7604368e2f564d51f540e51c1f6fad1f75189f17d7db2f"
+}

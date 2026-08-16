@@ -1,0 +1,159 @@
+{
+  "sir": {
+    "matching": {
+      "pairs": [
+        {
+          "gt_id": "bldg_01",
+          "pred_id": "pred_000",
+          "iou": 0.9091160905654935,
+          "center_distance_m": 0.21942519945138392,
+          "extent_abs_error_m": [
+            0.13071816457079422,
+            0.036756077174723956,
+            0.030997170412124575
+          ]
+        },
+        {
+          "gt_id": "wall_n",
+          "pred_id": "pred_001",
+          "iou": 0.712864376055992,
+          "center_distance_m": 0.1364476439278982,
+          "extent_abs_error_m": [
+            0.04447839850281454,
+            0.006664250101247493,
+            0.10263011625176865
+          ]
+        },
+        {
+          "gt_id": "wall_s",
+          "pred_id": "pred_002",
+          "iou": 0.07874447427979152,
+          "center_distance_m": 0.22503489246700192,
+          "extent_abs_error_m": [
+            0.10160124882181165,
+            0.00871493177466176,
+            0.19841404882795377
+          ]
+        },
+        {
+          "gt_id": "wall_e",
+          "pred_id": "pred_003",
+          "iou": 0.5043219302764563,
+          "center_distance_m": 0.10592526858175912,
+          "extent_abs_error_m": [
+            0.0015766179074372388,
+            0.1057819756051428,
+            0.20610363808004806
+          ]
+        },
+        {
+          "gt_id": "wall_w",
+          "pred_id": "pred_004",
+          "iou": 0.14492853038590772,
+          "center_distance_m": 0.20097178564707602,
+          "extent_abs_error_m": [
+            0.0036209473516368718,
+            0.05178310281725551,
+            0.016169624855844944
+          ]
+        },
+        {
+          "gt_id": "roof_01",
+          "pred_id": "pred_005",
+          "iou": 0.5043961039897719,
+          "center_distance_m": 0.14131608057603795,
+          "extent_abs_error_m": [
+            0.29790480083557647,
+            0.1325032142424849,
+            0.0009790349892657702
+          ]
+        },
+        {
+          "gt_id": "door_01",
+          "pred_id": "pred_006",
+          "iou": 0.0,
+          "center_distance_m": 0.15859552340158573,
+          "extent_abs_error_m": [
+            0.01320408977747034,
+            0.001830961934347286,
+            0.05026453000208253
+          ]
+        },
+        {
+          "gt_id": "win_s1",
+          "pred_id": "pred_007",
+          "iou": 0.6192208184240042,
+          "center_distance_m": 0.18576739256217856,
+          "extent_abs_error_m": [
+            0.026491068111722527,
+            0.001070937103714087,
+            0.02648357018740799
+          ]
+        },
+        {
+          "gt_id": "win_s2",
+          "pred_id": "pred_008",
+          "iou": 0.0,
+          "center_distance_m": 0.29980569391844536,
+          "extent_abs_error_m": [
+            0.028929961776863244,
+            0.0009618040724905796,
+            0.03975083432149851
+          ]
+        },
+        {
+          "gt_id": "road_01",
+          "pred_id": "pred_009",
+          "iou": 0.0,
+          "center_distance_m": 0.2036279895227991,
+          "extent_abs_error_m": [
+            1.1378035465712593,
+            0.17492466642946525,
+            0.0004787021927490226
+          ]
+        },
+        {
+          "gt_id": "tree_01",
+          "pred_id": "pred_010",
+          "iou": 0.9311744935765701,
+          "center_distance_m": 0.17139562531107302,
+          "extent_abs_error_m": [
+            0.0,
+            0.0,
+            0.10702309552604117
+          ]
+        }
+      ],
+      "unmatched_gt": [],
+      "unmatched_pred": []
+    },
+    "geometry": {
+      "mean_aabb_iou": 0.4004333470503625,
+      "centroid_rmse_m": 0.19291365781241462,
+      "extent_mae_m": 0.0935337918524153,
+      "entity_precision": 1.0,
+      "entity_recall": 1.0
+    },
+    "semantics": {
+      "class_accuracy_matched": 0.7272727272727273,
+      "kind_accuracy_matched": 1.0,
+      "semantic_resolution_accuracy_matched": 1.0
+    },
+    "topology": {
+      "relation_precision": 1.0,
+      "relation_recall": 0.8333333333333334,
+      "relation_f1": 0.9090909090909091,
+      "tp": 20,
+      "fp": 0,
+      "fn": 4
+    },
+    "uncertainty": {
+      "confidence_brier": 0.40476363636363644
+    },
+    "provenance": {
+      "analytic_observed_violation_rate": 0.0,
+      "violations": 0,
+      "analytic_entities": 11
+    }
+  }
+}
