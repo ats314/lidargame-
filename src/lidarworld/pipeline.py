@@ -608,6 +608,13 @@ def _apply_streets(spec: str, world, cloud, raster, class_raster) -> dict:
         lines = converted
     lines = [line - world.origin[:2] for line in lines]
 
+    # The seed wants the network itself, not the raster: a centreline and a
+    # width regenerate a road, a class raster only recolours one.
+    world.notes["road_network"] = [
+        {"line": [[round(float(x), 2), round(float(y), 2)] for x, y in line],
+         "half_width": round(float(w), 2)}
+        for line, w in zip(lines, half)]
+
     mask = street_stage.rasterise(lines, half, raster)
     info = street_stage.apply(class_raster, mask,
                               ground=terrain_stage.GROUND, road=terrain_stage.ROAD,
