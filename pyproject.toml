@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lidarworld"
+version = "0.2.0"
+description = "Compile LiDAR point clouds into themeable, engine-agnostic playable worlds"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+# scipy accelerates morphology and connected components; laspy reads LAZ.
+fast = ["scipy>=1.10"]
+las = ["laspy>=2.5"]
+laz = ["laspy[lazrs]>=2.5"]
+dev = ["pytest>=7", "scipy>=1.10", "laspy>=2.5"]
+
+[project.scripts]
+lidarworld = "lidarworld.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lidarworld = ["themes/packs/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
