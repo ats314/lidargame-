@@ -25,10 +25,14 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev,laz]"
       - name: Fetch a public-domain USGS 3DEP tile (Denver LoDo)
-        run: lidarworld fetch denver_lodo -o data/real
+        run: |
+          rm -rf data/real
+          lidarworld fetch denver_lodo -o data/real
+          ls -la data/real
       - name: Compile a block of it into the viewer
         run: |
-          lidarworld compile data/real/*.laz -o viewer/world -n denver_lodo \
+          TILE=$(ls data/real/*.laz | head -1)
+          lidarworld compile "$TILE" -o viewer/world -n denver_lodo \
             --crop 350 --tile 0.4 \
             --theme survey --theme victorian --theme neon --sir
           rm -f viewer/world/*.lwir

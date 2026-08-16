@@ -1,5 +1,9 @@
 # Generated data and builds
 /data/samples/
+/data/real/
+*.laz
+*.las
+*.part
 /build/
 /viewer/world/
 *.lwir

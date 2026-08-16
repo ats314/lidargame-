@@ -86,20 +86,32 @@ def load_sources(paths, config: Config, adapter: str | None = None,
                  options: dict | None = None) -> tuple[PointCloud, list]:
     """Ingest one or many files into a single cloud with per-point provenance."""
     clouds, sources = [], []
+    shared_bbox = config.bbox
+    kept_total = 0
     for i, path in enumerate(paths):
         result = ingest.load(path, adapter=adapter, source_id=f"src{i}", **(options or {}))
         cloud = result.cloud
-        bbox = config.bbox
-        if bbox is None and config.crop_m:
+        # The crop box is decided once, from the first source, and reused for
+        # every other one. Centring per file would carve a separate block out
+        # of each tile and leave them scattered across the world with empty
+        # space between -- which is exactly what happens when a glob picks up
+        # more tiles than you meant.
+        if shared_bbox is None and config.crop_m:
             lo, hi = cloud.bounds
             cx, cy = (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2
             half = config.crop_m / 2
-            bbox = (cx - half, cy - half, cx + half, cy + half)
+            shared_bbox = (cx - half, cy - half, cx + half, cy + half)
+        bbox = shared_bbox
         if bbox is not None:
             minx, miny, maxx, maxy = bbox
             inside = ((cloud.xyz[:, 0] >= minx) & (cloud.xyz[:, 0] <= maxx)
                       & (cloud.xyz[:, 1] >= miny) & (cloud.xyz[:, 1] <= maxy))
             kept = int(inside.sum())
+            kept_total += kept
+            if kept == 0 and len(paths) > 1:
+                # A neighbouring tile that does not reach the crop box is
+                # normal, not an error. Only an empty result overall is.
+                continue
             if kept == 0:
                 lo, hi = cloud.bounds
                 raise ValueError(
@@ -117,6 +129,10 @@ def load_sources(paths, config: Config, adapter: str | None = None,
         clouds.append(cloud)
         sources.append(result.source)
 
+    if not clouds:
+        raise ValueError(
+            f"crop selected no points from any of {len(paths)} source(s). "
+            "Check that they overlap the area you asked for.")
     if len(clouds) == 1:
         return clouds[0], sources
 
