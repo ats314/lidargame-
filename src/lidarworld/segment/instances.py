@@ -20,6 +20,11 @@ from ..types import SEMANTIC_INDEX, PointCloud
 
 S = SEMANTIC_INDEX
 
+#: A candidate this much lower than a stem within this multiple of its crown is
+#: the same crown's flank, not a neighbouring tree.
+SHOULDER_REACH = 1.6
+SHOULDER_RATIO = 0.66
+
 
 @dataclass
 class Instance:
@@ -99,52 +104,156 @@ def cluster(cloud: PointCloud, classes: tuple[str, ...], role: str, *,
     return out
 
 
-def trees(cloud: PointCloud, raster: Raster2D, chm: np.ndarray, *,
-          min_height: float = 2.5, start_id: int = 0) -> list[Instance]:
-    """Individual trees from canopy-height local maxima.
+def crown_radius(height, *, slope: float = 0.16, intercept: float = 0.6,
+                 lo: float = 1.2, hi: float = 7.0):
+    """Allometric crown radius from canopy height, in metres.
 
-    Plain clustering merges a whole treeline into one blob. Local maxima on the
-    canopy height model split it back into stems, which is what an instanced
-    renderer needs. Crown radius follows the usual allometric rule of thumb
-    (roughly a quarter of height), clamped by the local canopy footprint.
+    Roughly the Popescu/Wynne relation for mixed urban canopy: crowns widen with
+    height but sub-linearly. The clamps stop a noise spike from claiming a 14 m
+    crown, and stop a real oak from being searched with a 1 m window.
+    """
+    return np.clip(slope * np.asarray(height, dtype=float) + intercept, lo, hi)
+
+
+def _smooth_chm(chm: np.ndarray, sigma_cells: float) -> np.ndarray:
+    """Separable Gaussian blur. Raw CHM noise is what invents phantom stems."""
+    if sigma_cells <= 0.05:
+        return chm
+    radius = max(1, int(round(sigma_cells * 2)))
+    x = np.arange(-radius, radius + 1, dtype=float)
+    kernel = np.exp(-0.5 * (x / sigma_cells) ** 2)
+    kernel /= kernel.sum()
+    out = chm.astype(float)
+    for axis in (0, 1):
+        pad = [(radius, radius) if a == axis else (0, 0) for a in (0, 1)]
+        out = np.apply_along_axis(lambda line: np.convolve(line, kernel, mode="valid"),
+                                  axis, np.pad(out, pad, mode="edge"))
+    return out
+
+
+def _stems(smooth: np.ndarray, raster: Raster2D, min_height: float, max_height: float):
+    """Variable-window canopy maxima with non-maximum suppression.
+
+    A fixed 3x3 window invents a tree per raster cell: canopy noise makes most
+    cells a local maximum of their neighbours, and on a flat plateau *every*
+    tied cell qualifies. Instead a cell must win against everything inside its
+    own allometric crown, and accepted stems suppress later ones within it.
+    """
+    # `max_height` is a physical prior, not a tuning knob: no tree is 74 m tall
+    # in a city, so a canopy maximum that high is a building the semantics got
+    # wrong. Excluding only the over-tall cells is not enough -- the flanks of a
+    # tall structure fall back under the cap and become rim trees around it --
+    # so the rejection is grown by a crown's width first.
+    too_tall = smooth >= max_height
+    if too_tall.any():
+        reach = int(np.ceil(crown_radius(max_height) / max(raster.cell, 1e-6)))
+        pad = np.pad(too_tall, reach, mode="constant", constant_values=False)
+        span = 2 * reach + 1
+        grown = np.zeros_like(too_tall)
+        for di in range(span):
+            for dj in range(span):
+                grown |= pad[di:di + too_tall.shape[0], dj:dj + too_tall.shape[1]]
+        too_tall = grown
+
+    tall = np.argwhere((smooth > min_height) & ~too_tall)
+    if tall.size == 0:
+        return np.empty((0, 2)), np.empty(0), np.empty(0)
+
+    # Tallest first, so a stem is only ever suppressed by something at least as high.
+    heights = smooth[tall[:, 0], tall[:, 1]]
+    order = np.argsort(-heights, kind="stable")
+    tall, heights = tall[order], heights[order]
+    radii = crown_radius(heights)
+
+    gx, gy = raster.cell_centers()
+    candidates = np.column_stack([gx[tall[:, 0]], gy[tall[:, 1]]])
+
+    keep_xy, keep_h, keep_r = [], [], []
+    for k in range(len(candidates)):
+        if keep_xy:
+            d2 = ((np.asarray(keep_xy) - candidates[k]) ** 2).sum(axis=1)
+            kr, kh = np.asarray(keep_r), np.asarray(keep_h)
+            # Two stems whose crowns would overlap cannot be told apart from
+            # above, so they are one tree. Comparing against the larger radius
+            # alone lets crowns interpenetrate and splits one canopy into
+            # several -- the sum is the geometric statement that matters.
+            overlapping = d2 < (kr + radii[k]) ** 2
+            # And a candidate far lower than a nearby stem is that stem's
+            # shoulder, not a neighbour: real crowns are wider than allometry
+            # where the tree is old or open-grown, and their flanks otherwise
+            # ring the true peak with phantom stems.
+            shoulder = (d2 < (kr * SHOULDER_REACH) ** 2) & (heights[k] < SHOULDER_RATIO * kh)
+            if np.any(overlapping | shoulder):
+                continue
+        keep_xy.append(candidates[k])
+        keep_h.append(float(heights[k]))
+        keep_r.append(float(radii[k]))
+    return np.asarray(keep_xy), np.asarray(keep_h), np.asarray(keep_r)
+
+
+def _nearest_stem(xy: np.ndarray, stems: np.ndarray):
+    """Index of and squared distance to the closest stem, chunked to bound memory."""
+    nearest = np.zeros(len(xy), np.int64)
+    best = np.full(len(xy), np.inf)
+    for s, stem in enumerate(stems):
+        dist = ((xy - stem) ** 2).sum(axis=1)
+        closer = dist < best
+        best[closer] = dist[closer]
+        nearest[closer] = s
+    return nearest, best
+
+
+def trees(cloud: PointCloud, raster: Raster2D, chm: np.ndarray, *,
+          min_height: float = 2.5, max_height: float = 40.0, min_points: int = 20,
+          smooth_sigma: float = 0.8, start_id: int = 0) -> list[Instance]:
+    """Individual trees from canopy-height maxima, one stem per crown.
+
+    Plain clustering merges a whole treeline into one blob, so stems come from
+    maxima on the canopy height model -- but the CHM is blurred first and the
+    search window scales with height (see `_stems`), because a fixed window over
+    a noisy CHM produces a tree per cell rather than a tree per tree.
+
+    Points are partitioned to the *nearest* stem, so every return belongs to
+    exactly one tree instead of being double-counted by overlapping radius
+    queries around neighbouring peaks.
     """
     semantic = cloud["semantic"]
-    mask = semantic == S["vegetation_high"]
-    idx = np.flatnonzero(mask)
+    idx = np.flatnonzero(semantic == S["vegetation_high"])
     if idx.size < 30:
         return []
 
-    smooth = chm.copy()
-    pad = np.pad(smooth, 1, mode="edge")
-    stack = np.stack([pad[di:di + smooth.shape[0], dj:dj + smooth.shape[1]]
-                      for di in range(3) for dj in range(3)])
-    local_max = stack.max(axis=0)
-    is_peak = (smooth >= local_max - 1e-6) & (smooth > min_height)
-
-    peaks = np.argwhere(is_peak)
-    if peaks.size == 0:
+    sigma_cells = smooth_sigma / max(raster.cell, 1e-6)
+    smooth = _smooth_chm(np.nan_to_num(np.asarray(chm, float), nan=0.0), sigma_cells)
+    stems, stem_h, stem_r = _stems(smooth, raster, min_height, max_height)
+    if len(stems) == 0:
         return []
-    gx, gy = raster.cell_centers()
+
     xy = cloud.xyz[idx, :2]
+    nearest, best = _nearest_stem(xy, stems)
+    # A return past 1.3x the crown belongs to no stem rather than to the closest.
+    nearest[best > (stem_r[nearest] * 1.3) ** 2] = -1
 
     out: list[Instance] = []
-    for pi, pj in peaks:
-        height = float(smooth[pi, pj])
-        cx, cy = float(gx[pi]), float(gy[pj])
-        radius = float(np.clip(height * 0.26, 0.9, 6.0))
-        near = np.flatnonzero(((xy[:, 0] - cx) ** 2 + (xy[:, 1] - cy) ** 2) < radius ** 2)
-        if near.size < 20:
+    order = np.argsort(nearest, kind="stable")
+    grouped = nearest[order]
+    bounds = np.searchsorted(grouped, np.arange(len(stems) + 1))
+    for s in range(len(stems)):
+        sel = order[bounds[s]:bounds[s + 1]]
+        if sel.size < min_points:
             continue
-        pts = cloud.xyz[idx[near]]
+        pts = cloud.xyz[idx[sel]]
         base = float(np.percentile(pts[:, 2], 5))
+        # Prefer the observed spread over the allometric guess when it is tighter.
+        spread = float(np.percentile(np.linalg.norm(pts[:, :2] - stems[s], axis=1), 90))
+        radius = float(np.clip(spread, 0.9, stem_r[s]))
         out.append(Instance(
             id=start_id + len(out), role="volume.vegetation.high",
-            center=np.array([cx, cy, base]),
-            size=np.array([radius, radius, height]),
-            support=int(near.size),
-            confidence=float(np.clip(0.35 + 0.5 * min(1.0, near.size / 300.0), 0.15, 0.95)),
-            point_idx=idx[near],
-            attrs={"crown_radius": radius, "canopy_height": height},
+            center=np.array([stems[s][0], stems[s][1], base]),
+            size=np.array([radius, radius, stem_h[s]]),
+            support=int(sel.size),
+            confidence=float(np.clip(0.35 + 0.5 * min(1.0, sel.size / 300.0), 0.15, 0.95)),
+            point_idx=idx[sel],
+            attrs={"crown_radius": radius, "canopy_height": float(stem_h[s])},
         ))
     return out
 

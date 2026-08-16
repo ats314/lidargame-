@@ -55,11 +55,14 @@ def _read_native(path: Path):
     intensity = body[:, 12:14].copy().view(np.uint16).ravel().astype(np.float32) / 65535.0
     if point_format <= 5:
         classification = (body[:, 15] & 0b00011111).astype(np.uint8)
-    else:                                    # 1.4 formats moved the field
+        # Byte 14 packs return number (bits 0-2) and return count (bits 3-5).
+        returns = (body[:, 14] & 0b111, (body[:, 14] >> 3) & 0b111)
+    else:                                    # 1.4 formats widened both fields
         classification = body[:, 16].astype(np.uint8)
+        returns = (body[:, 14] & 0b1111, (body[:, 14] >> 4) & 0b1111)
     header = {"version": f"{version[0]}.{version[1]}", "point_format": point_format,
               "count": int(count), "scale": scale.tolist(), "offset": offset.tolist()}
-    return xyz, intensity, classification, header
+    return xyz, intensity, classification, returns, header
 
 
 @register("las", (".las", ".laz"), "LAS/LAZ airborne or terrestrial tile with ASPRS classes")
@@ -73,6 +76,8 @@ def load_las(path: Path, options: dict) -> IngestResult:
         xyz = np.column_stack([np.asarray(las.x), np.asarray(las.y), np.asarray(las.z)]).astype(np.float64)
         intensity = np.asarray(las.intensity, dtype=np.float32) / 65535.0
         classification = np.asarray(las.classification, dtype=np.uint8)
+        returns = (np.asarray(las.return_number, dtype=np.uint8),
+                   np.asarray(las.number_of_returns, dtype=np.uint8))
         header = {"version": str(las.header.version), "point_format": las.header.point_format.id,
                   "count": int(las.header.point_count)}
         try:
@@ -86,13 +91,18 @@ def load_las(path: Path, options: dict) -> IngestResult:
             raise ImportError(
                 "reading .laz needs laspy with a decompression backend: "
                 "pip install 'laspy[lazrs]'") from None
-        xyz, intensity, classification, header = _read_native(path)
+        xyz, intensity, classification, returns, header = _read_native(path)
         reader = "builtin"
 
     keep_noise = options.get("keep_noise", False)
     semantic = remap(classification, ASPRS)
+    # Return structure is the strongest vegetation evidence airborne LiDAR
+    # carries: a pulse through a canopy comes back several times, a pulse off a
+    # roof comes back once. Dropping it at the door throws that away.
+    return_number, num_returns = (np.asarray(r, dtype=np.uint8) for r in returns)
     cloud = PointCloud(xyz, intensity=intensity, semantic=semantic,
-                       source_class=classification.astype(np.uint8))
+                       source_class=classification.astype(np.uint8),
+                       return_number=return_number, num_returns=num_returns)
     if not keep_noise:
         from ..types import SEMANTIC_INDEX
         mask = semantic != SEMANTIC_INDEX["noise"]
@@ -144,7 +154,7 @@ def write_las(path: Path, xyz: np.ndarray, intensity: np.ndarray, classification
     rec[:, :12] = xyz_i.view(np.uint8).reshape(n, 12)
     inten = np.clip(intensity * 65535, 0, 65535).astype(np.uint16)
     rec[:, 12:14] = inten.view(np.uint8).reshape(n, 2)
-    rec[:, 14] = 0b00010001                        # return 1 of 1
+    rec[:, 14] = 0b00001001                        # return 1 of 1 (bits 0-2, 3-5)
     rec[:, 15] = classification.astype(np.uint8)
     with open(path, "wb") as fh:
         fh.write(header)
