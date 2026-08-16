@@ -42,9 +42,15 @@ class Rule:
     note: str = ""
 
     def __post_init__(self):
-        self._all = Ctx.encode(self.ctx_all)
-        self._any = Ctx.encode(self.ctx_any)
-        self._none = Ctx.encode(self.ctx_none)
+        # Unknown flags must not crash construction: a pack should be loadable
+        # so that validate() can report every problem at once.
+        self.unknown_flags = tuple(
+            f for group in (self.ctx_all, self.ctx_any, self.ctx_none)
+            for f in group if f not in Ctx.BY_NAME)
+        known = lambda group: [f for f in group if f in Ctx.BY_NAME]  # noqa: E731
+        self._all = Ctx.encode(known(self.ctx_all))
+        self._any = Ctx.encode(known(self.ctx_any))
+        self._none = Ctx.encode(known(self.ctx_none))
         # More specific rules win: each required flag is worth a point.
         self._specificity = (len(self.ctx_all) * 2 + len(self.ctx_any)
                              + len(self.ctx_none) + (2 if self.role != "*" else 0)

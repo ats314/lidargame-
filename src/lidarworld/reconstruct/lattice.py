@@ -216,6 +216,28 @@ def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
             ))
             occupancy[hole_labels == lab] = 0     # the hole is real geometry
 
+    # Doors reach the ground, so they are notches in the silhouette rather
+    # than enclosed holes -- the flood fill can never find them. They show up
+    # instead as columns whose lowest solid cell sits above the wall's base.
+    for notch in _door_notches(occupancy.astype(bool), cell,
+                               min_width=0.7, max_width=2.6,
+                               min_height=1.5, max_height=3.2):
+        u0, u1, v0, v1 = notch
+        cells = np.argwhere(_region_mask(occupancy.shape, u0, u1, v0, v1)
+                            & ~occupancy.astype(bool))
+        if not len(cells):
+            continue
+        width = (u1 - u0) * cell
+        height = (v1 - v0) * cell
+        center_uv = np.array([[uv_min[0] + (u0 + u1) / 2 * cell,
+                               uv_min[1] + (v0 + v1) / 2 * cell]])
+        openings.append(Opening(
+            id=len(openings), role="opening.door", cells=cells,
+            uv_min=(float(uv_min[0] + u0 * cell), float(uv_min[1] + v0 * cell)),
+            uv_max=(float(uv_min[0] + u1 * cell), float(uv_min[1] + v1 * cell)),
+            center_world=patch.unproject(center_uv)[0], width=float(width),
+            height=float(height), sill_height=0.0, confidence=0.55))
+
     solid = occupancy.astype(bool)
 
     # --- context bitmask -------------------------------------------------
@@ -245,7 +267,10 @@ def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
     vert_edge = (~down | ~up)
     ctx[solid & horiz_edge & vert_edge] |= Ctx.CORNER_CONVEX
 
-    depth = distance_to_false(solid)
+    # Pad before the distance transform: cells at the lattice border have no
+    # solid neighbour outside it, so without padding they would be scored as
+    # deep interior while also carrying an EDGE flag.
+    depth = distance_to_false(np.pad(solid, 1))[1:-1, 1:-1]
     ctx[solid & (depth >= interior_depth)] |= Ctx.INTERIOR
 
     # v is the up-slope axis, so the extreme rows are the top and bottom bands.
@@ -289,3 +314,47 @@ def context_histogram(lattice: TileLattice) -> dict[str, int]:
     ctx = lattice.context[solid]
     return {name: int((ctx & bit).astype(bool).sum())
             for bit, name in sorted(Ctx.NAMES.items()) if (ctx & bit).any()}
+
+
+def _region_mask(shape, u0: int, u1: int, v0: int, v1: int) -> np.ndarray:
+    mask = np.zeros(shape, dtype=bool)
+    mask[u0:u1, v0:v1] = True
+    return mask
+
+
+def _door_notches(solid: np.ndarray, cell: float, *, min_width: float, max_width: float,
+                  min_height: float, max_height: float) -> list[tuple[int, int, int, int]]:
+    """Find ground-level gaps in a wall's silhouette.
+
+    For each column, the lowest solid cell tells you where the wall starts. A
+    doorway is a run of columns where it starts well above the base of the
+    wall, with the width and height of a door.
+    """
+    nu, nv = solid.shape
+    lowest = np.full(nu, nv, dtype=np.int64)
+    occupied_columns = solid.any(axis=1)
+    if occupied_columns.sum() < 3:
+        return []
+    lowest[occupied_columns] = np.argmax(solid[occupied_columns], axis=1)
+
+    base = int(np.median(lowest[occupied_columns]))
+    gap_cells = np.maximum(lowest - base, 0)
+    min_cells = max(1, int(round(min_height / cell)))
+    max_cells = int(round(max_height / cell))
+    is_gap = occupied_columns & (gap_cells >= min_cells) & (gap_cells <= max_cells)
+
+    notches = []
+    u = 0
+    while u < nu:
+        if not is_gap[u]:
+            u += 1
+            continue
+        start = u
+        while u + 1 < nu and is_gap[u + 1]:
+            u += 1
+        width = (u - start + 1) * cell
+        if min_width <= width <= max_width:
+            top = int(lowest[start:u + 1].min())
+            notches.append((start, u + 1, base, top))
+        u += 1
+    return notches
