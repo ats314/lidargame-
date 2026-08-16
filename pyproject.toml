@@ -15,9 +15,11 @@ dependencies = ["numpy>=1.24"]
 [project.optional-dependencies]
 # scipy accelerates morphology and connected components; laspy reads LAZ.
 fast = ["scipy>=1.10"]
+# Exact ray-triangle intersection for forward validation (Embree, CPU, vendor-neutral).
+exact = ["open3d>=0.18"]
 las = ["laspy>=2.5"]
 laz = ["laspy[lazrs]>=2.5"]
-dev = ["pytest>=7", "scipy>=1.10", "laspy>=2.5", "jsonschema>=4", "pyproj>=3.4"]
+dev = ["pytest>=7", "scipy>=1.10", "laspy>=2.5", "jsonschema>=4", "pyproj>=3.4", "open3d>=0.18"]
 
 [project.scripts]
 lidarworld = "lidarworld.cli:main"

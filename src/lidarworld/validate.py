@@ -35,6 +35,7 @@ class Consistency:
     early: int                # simulation hit something in front of the return
     late: int                 # simulation hit something behind the return
     grazing: int              # disagreement at near-tangent incidence (unreliable)
+    backend: str              # which ray caster produced this
     rmse: float
     tolerance: float
     sensor: list[float]
@@ -48,6 +49,7 @@ class Consistency:
         return {
             "rays": self.rays, "explained": self.explained, "missing": self.missing,
             "early": self.early, "late": self.late, "grazing": self.grazing,
+            "backend": self.backend,
             "explainedFraction": round(self.explained_fraction, 4),
             "rangeRmse": round(self.rmse, 4), "tolerance": self.tolerance,
             "sensor": [round(v, 3) for v in self.sensor],
@@ -55,20 +57,75 @@ class Consistency:
         }
 
     def summary(self) -> str:
-        return (f"{self.explained:,}/{self.rays:,} returns explained "
+        return (f"[{self.backend}] {self.explained:,}/{self.rays:,} returns explained "
                 f"({self.explained_fraction:.1%}), range RMSE {self.rmse * 100:.1f} cm, "
                 f"{self.missing:,} unexplained, {self.early:,} over-occluded, "
                 f"{self.grazing:,} grazing (inconclusive)")
 
 
-class VoxelScene:
-    """Dense occupancy + node attribution over the reconstructed mesh.
+class EmbreeScene:
+    """Exact ray-triangle intersection via Open3D's Embree-backed raycaster.
 
-    A BVH would be the textbook answer, but a compiled tile is bounded and a
-    dense grid at ~0.25 m costs a few tens of megabytes while making the ray
-    march a pure numpy gather -- which is what keeps this usable as a routine
-    check rather than an offline job.
+    This is the accurate backend and the default when Open3D is installed. It
+    matters for two reasons the voxel version cannot fix:
+
+    * **No thickening.** A voxel scene inflates every surface by up to half a
+      cell, which at grazing incidence down a street occludes rays that would
+      really have passed by -- inventing over-occlusion that is an artefact of
+      the measurement, not of the reconstruction.
+    * **True normals.** Embree returns the struck triangle's own normal, so the
+      incidence angle is exact rather than quantised to a voxel face. That is
+      what makes the grazing classification trustworthy instead of a guess.
+
+    It is also CPU-only and vendor-neutral, so the closure loop does not depend
+    on any particular GPU.
     """
+
+    backend = "embree"
+
+    def __init__(self, world: World, **_ignored):
+        import open3d as o3d
+
+        positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float32)
+        indices = np.asarray(world.arrays["mesh/indices"], dtype=np.uint32).reshape(-1, 3)
+        node_attr = np.asarray(world.arrays["mesh/node"], dtype=np.int64)
+
+        self._o3d = o3d
+        self.scene = o3d.t.geometry.RaycastingScene()
+        self.scene.add_triangles(o3d.core.Tensor(positions), o3d.core.Tensor(indices))
+        # Every vertex of a quad carries the same node slot, so the first
+        # index of each triangle identifies its owner.
+        self.triangle_node = node_attr[indices[:, 0].astype(np.int64)]
+        self.resolution = 0.0
+
+    def march(self, origin: np.ndarray, directions: np.ndarray, max_range: float,
+              **_ignored):
+        n = len(directions)
+        rays = np.empty((n, 6), dtype=np.float32)
+        rays[:, 0:3] = origin.astype(np.float32)
+        rays[:, 3:6] = directions.astype(np.float32)
+        result = self.scene.cast_rays(self._o3d.core.Tensor(rays))
+
+        t_hit = result["t_hit"].numpy().astype(np.float64)
+        primitive = result["primitive_ids"].numpy().astype(np.int64)
+        normals = result["primitive_normals"].numpy().astype(np.float64)
+
+        missed = ~np.isfinite(t_hit) | (t_hit > max_range)
+        t_hit[missed] = np.inf
+        hit_node = np.where(missed, -1, self.triangle_node[np.clip(primitive, 0, len(self.triangle_node) - 1)])
+        normals[missed] = 0.0
+        return t_hit, hit_node.astype(np.int32), normals
+
+
+class VoxelScene:
+    """Dense occupancy + node attribution -- the numpy-only fallback.
+
+    Used when Open3D is not installed. Surfaces are thickened to the voxel
+    size and normals are quantised, so treat its over-occlusion and grazing
+    counts as upper bounds rather than measurements. `EmbreeScene` is exact.
+    """
+
+    backend = "voxel"
 
     def __init__(self, world: World, resolution: float = 0.25, max_cells: int = 40_000_000):
         positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float64)
@@ -177,9 +234,22 @@ class VoxelScene:
         return hit_t, hit_node, hit_normal
 
 
+def build_scene(world: World, *, resolution: float = 0.25, backend: str = "auto"):
+    """Pick a ray-casting backend. Exact where possible, numpy where not."""
+    if backend in ("auto", "embree"):
+        try:
+            return EmbreeScene(world)
+        except ImportError:
+            if backend == "embree":
+                raise ImportError(
+                    "the embree backend needs Open3D: pip install 'lidarworld[exact]'") from None
+    return VoxelScene(world, resolution)
+
+
 def simulate(world: World, points: np.ndarray, sensor: np.ndarray, *,
              resolution: float = 0.25, tolerance: float = 0.35,
-             max_rays: int = 40_000, max_range: float = 120.0) -> Consistency:
+             max_rays: int = 40_000, max_range: float = 120.0,
+             backend: str = "auto") -> Consistency:
     """Re-scan the reconstruction from `sensor` and score it against `points`.
 
     `points` must be observations made *from that sensor position* -- comparing
@@ -196,7 +266,7 @@ def simulate(world: World, points: np.ndarray, sensor: np.ndarray, *,
     rel, observed = rel[keep], observed[keep]
     directions = rel / observed[:, None]
 
-    scene = VoxelScene(world, resolution)
+    scene = build_scene(world, resolution=resolution, backend=backend)
     simulated, hit_node, hit_normal = scene.march(sensor, directions, max_range)
 
     delta = simulated - observed
@@ -206,7 +276,10 @@ def simulate(world: World, points: np.ndarray, sensor: np.ndarray, *,
     # would have grazed past or struck: half a voxel of thickness moves the
     # range by many metres. Those rays are reported, not counted as errors.
     incidence = np.abs(np.einsum("ij,ij->i", directions, hit_normal))
-    grazing = finite & ~explained & (incidence < 0.2)
+    # With exact hits the tangent band can be tight; the voxel fallback needs a
+    # wider one because half a cell of thickening moves the range by metres.
+    grazing_cos = 0.08 if scene.backend == "embree" else 0.2
+    grazing = finite & ~explained & (incidence < grazing_cos)
     early = finite & ~explained & ~grazing & (delta < -tolerance)
     late = finite & ~explained & ~grazing & (delta > tolerance)
     missing = ~finite
@@ -232,7 +305,7 @@ def simulate(world: World, points: np.ndarray, sensor: np.ndarray, *,
     return Consistency(
         rays=int(len(observed)), explained=int(explained.sum()), missing=int(missing.sum()),
         early=int(early.sum()), late=int(late.sum()), grazing=int(grazing.sum()),
-        rmse=rmse, tolerance=tolerance,
+        backend=scene.backend, rmse=rmse, tolerance=tolerance,
         sensor=sensor.tolist(), per_node=per_node)
 
 

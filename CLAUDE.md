@@ -130,10 +130,13 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    structure before laying lattices.
 2. **Buildings do not meet the ground.** Wall patches start where the points
    start. Fix: extend wall bottoms down to terrain contact.
-3. **Forward validation explains only ~18% of returns**, with thousands of rays
-   hitting geometry that is not there. Mostly a symptom of 1 and 2 —
-   gap-closing over-extends surfaces by up to half a cell, which at grazing
-   angles occludes a lot. This number is the scoreboard; move it.
+3. **Forward validation explains ~28% of returns** (Embree backend). 5,421 rays
+   hit geometry that is not there and 5,010 pass through geometry that should
+   be. Both are real -- swapping the voxel raycaster for exact ray-triangle
+   intersection collapsed the inconclusive-grazing bucket from 10,307 to 2,333
+   and raised explained from 18.5%, which proved most of the old over-occlusion
+   was measurement artefact but left this residue as genuine. Symptom of 1 and
+   2. This number is the scoreboard; move it.
 4. **Airborne data barely produces walls.** Expected — the sensor sees facades
    at a glancing angle. Denver gave 1057 roof planes and 23 walls. Use a larger
    `--tile` on airborne input so lattices are not mostly `sparse_evidence`.

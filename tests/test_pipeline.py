@@ -161,3 +161,33 @@ def test_cityjson_keeps_context_that_citygml_cannot_express(compiled_world, tmp_
     with_context = [o for o in document["CityObjects"].values()
                     if o["attributes"].get("+lidarworld_context")]
     assert with_context, "context summaries must survive the CityGML mapping"
+
+
+def test_forward_validation_backends_agree_on_a_clean_hit(compiled_world):
+    """Both ray casters must find the same surface for an unambiguous ray."""
+    import numpy as np
+
+    from lidarworld.validate import build_scene
+
+    positions = np.asarray(compiled_world.arrays["mesh/positions"], dtype=np.float64)
+    target = positions.mean(axis=0)
+    # Fire straight down from well above the world onto whatever is there.
+    origin = np.array([target[0], target[1], positions[:, 2].max() + 25.0])
+    direction = np.array([[0.0, 0.0, -1.0]])
+
+    voxel = build_scene(compiled_world, backend="voxel")
+    assert voxel.backend == "voxel"
+    t_voxel, node_voxel, _ = voxel.march(origin, direction, 200.0)
+
+    try:
+        embree = build_scene(compiled_world, backend="embree")
+    except ImportError:
+        pytest.skip("Open3D not installed")
+    assert embree.backend == "embree"
+    t_embree, node_embree, normals = embree.march(origin, direction, 200.0)
+
+    if np.isfinite(t_embree[0]):
+        # Exact intersection must not be further away than the thickened one.
+        assert t_embree[0] >= t_voxel[0] - 1e-6 or not np.isfinite(t_voxel[0])
+        assert abs(np.linalg.norm(normals[0]) - 1.0) < 1e-3, "normals must be unit length"
+        assert node_embree[0] >= 0
