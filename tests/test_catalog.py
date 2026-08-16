@@ -39,3 +39,24 @@ def test_places_point_at_commercial_sources_with_sane_bboxes():
         assert -180 <= west < east <= 180
         assert -90 <= south < north <= 90
         assert place["description"]
+
+
+def test_footprint_layers_are_attributed_and_addressable():
+    from lidarworld.data.gis import FOOTPRINTS
+
+    assert FOOTPRINTS
+    for layer in FOOTPRINTS.values():
+        assert layer.service.startswith("https://")
+        assert layer.attribution
+        assert layer.license
+        assert isinstance(layer.layer, int)
+
+
+def test_point_in_polygon_matches_a_known_square():
+    import numpy as np
+
+    from lidarworld.data.gis import point_in_polygon
+
+    square = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]])
+    pts = np.array([[5.0, 5.0], [1.0, 9.0], [-1.0, 5.0], [11.0, 5.0], [5.0, 20.0]])
+    assert point_in_polygon(pts, square).tolist() == [True, True, False, False, False]

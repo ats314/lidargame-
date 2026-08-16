@@ -108,6 +108,46 @@ COMMERCIAL: dict[str, Source] = {s.id: s for s in [
         homepage="https://pnoa.ign.es/pnoa-lidar",
     ),
     Source(
+        id="co_hazard_mapping",
+        name="Colorado Hazard Mapping Program LiDAR",
+        license="State of Colorado open data (free download, no stated restriction)",
+        commercial=True,
+        attribution="Colorado Water Conservation Board / Colorado Hazard Mapping Program",
+        coverage="Colorado, flood-risk focused watersheds and Front Range",
+        classified="ASPRS classes; DEM and DSM derivatives alongside the point cloud",
+        homepage="https://coloradohazardmapping.com/lidarDownload",
+        notes="Denser and often more recent than 3DEP over its coverage. "
+              "Complements CO_DRCOG_2020 rather than replacing it.",
+    ),
+    Source(
+        id="drcog_open_data",
+        name="DRCOG Regional Data Catalog",
+        license="Varies by dataset; most are open with attribution",
+        commercial=True,
+        attribution="Denver Regional Council of Governments",
+        coverage="Denver metro: built environment, land use, transportation",
+        classified="Vector GIS, not point clouds -- side input for the compiler",
+        homepage="https://data.drcog.org/",
+        notes="Read each dataset's own terms. Useful as GIS side input "
+              "(footprints, land use, road centrelines) rather than as LiDAR.",
+    ),
+    Source(
+        id="denver_open_data",
+        name="Denver Open Data Catalog (geospatial)",
+        license="Liability disclaimer, no explicit copyright grant -- commercial "
+                "use probable but UNCONFIRMED; verify with the city before shipping",
+        commercial=True,
+        attribution="City and County of Denver, Department of Technology Services",
+        coverage="City and County of Denver",
+        classified="Vector GIS. Building Outlines 2022 carries height and ground "
+                   "elevation per building",
+        homepage="https://opendata-geospatialdenver.hub.arcgis.com",
+        notes="Building footprints are the highest-leverage side input available: "
+              "they answer building grouping outright, which airborne LiDAR alone "
+              "cannot. See lidarworld.data.gis. Licence is the weakest of any "
+              "source listed here -- flagged rather than assumed.",
+    ),
+    Source(
         id="opentopography",
         name="OpenTopography",
         license="Per-dataset; many CC BY or public domain",
