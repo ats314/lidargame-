@@ -14,6 +14,67 @@ import sys
 from pathlib import Path
 
 
+def _parse_area(text: str) -> tuple[float, float, float, float]:
+    parts = [v for v in text.split(",") if v.strip()]
+    if len(parts) != 3:
+        raise SystemExit("--area takes x,y,size in the source CRS, "
+                         "e.g. --area 500250,4399600,350")
+    try:
+        x, y, size = (float(v) for v in parts)
+    except ValueError:
+        raise SystemExit(f"--area {text!r} is not three numbers") from None
+    half = size / 2.0
+    return (x - half, y - half, x + half, y + half)
+
+
+def _resolve_inputs(args) -> tuple[list[str], tuple | None]:
+    """Turn directories and `--area` into the explicit list of tiles to open.
+
+    Passing files loads exactly those files, as before. Passing a directory
+    builds a header-only index over it and opens only the tiles that overlap
+    the requested area -- the difference between compiling a block and
+    decoding a metro area to throw 99% of it away.
+    """
+    from .data.tiles import TileIndex
+
+    area = _parse_area(args.area) if args.area else None
+    roots = [Path(p) for p in args.inputs]
+    directories = [p for p in roots if p.is_dir()]
+    files = [p for p in roots if not p.is_dir()]
+
+    missing = [p for p in files if not p.exists()]
+    if missing:
+        raise SystemExit("no such file: " + ", ".join(str(p) for p in missing))
+    selected = [str(p) for p in files]
+
+    for root in directories:
+        index = TileIndex.build(root)
+        if not len(index):
+            raise SystemExit(f"no LAS/LAZ tiles under {root}")
+        if area is None:
+            print(f"  index       {root}: {len(index)} tiles, "
+                  f"{index.total_points:,} points (no --area, taking all)")
+            selected.extend(t.path for t in index.tiles)
+            continue
+        hits = index.query(area)
+        if not hits:
+            lo_x, lo_y, hi_x, hi_y = index.bounds
+            raise SystemExit(
+                f"--area selects no tiles from {root}. The index covers "
+                f"{lo_x:.0f},{lo_y:.0f} .. {hi_x:.0f},{hi_y:.0f}; the area asked for "
+                f"{area[0]:.0f},{area[1]:.0f} .. {area[2]:.0f},{area[3]:.0f}. "
+                "Coordinates are in the source CRS, not lat/lon.")
+        covered = index.coverage(area)
+        print(f"  index       {root}: {len(hits)}/{len(index)} tiles overlap, "
+              f"{covered:.0%} of the area covered")
+        if covered < 0.999:
+            print(f"  warning     {1 - covered:.0%} of the requested area has no tile "
+                  "behind it -- the world will have a hole there, not empty ground")
+        selected.extend(t.path for t in hits)
+
+    return selected, area
+
+
 def _cmd_compile(args) -> int:
     from . import Config, compile_world
     from .backends import gltf as gltf_backend
@@ -21,13 +82,16 @@ def _cmd_compile(args) -> int:
     from .ir import write_world
     from .themes import compile_theme, load_pack
 
+    inputs, area = _resolve_inputs(args)
+    bbox = tuple(float(v) for v in args.bbox.split(",")) if args.bbox else area
+
     config = Config(
         name=args.name or Path(args.inputs[0]).stem,
         terrain_cell=args.terrain_cell,
         tile=args.tile,
         plane_voxel=args.plane_voxel,
         decimate=args.decimate,
-        bbox=tuple(float(v) for v in args.bbox.split(",")) if args.bbox else None,
+        bbox=bbox,
         crop_m=args.crop,
         footprints=args.footprints,
         detect_openings=not args.no_openings,
@@ -37,8 +101,8 @@ def _cmd_compile(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    print(f"compiling {len(args.inputs)} source(s) -> {out}")
-    world = compile_world(args.inputs, config, adapter=args.adapter)
+    print(f"compiling {len(inputs)} source(s) -> {out}")
+    world = compile_world(inputs, config, adapter=args.adapter)
 
     ir_path = write_world(world, out / f"{config.name}.lwir")
     print(f"  spatial IR  {ir_path} ({ir_path.stat().st_size / 1e6:.1f} MB)")
@@ -235,6 +299,42 @@ def _cmd_fetch(args) -> int:
     return 0
 
 
+def _cmd_tiles(args) -> int:
+    """What is on disk, and does it actually cover the area you want?"""
+    from .data.tiles import TileIndex
+
+    index = TileIndex.build(args.root, use_cache=not args.reindex)
+    if not len(index):
+        print(f"no LAS/LAZ tiles under {args.root}")
+        return 1
+    s = index.summary()
+    lo_x, lo_y, hi_x, hi_y = index.bounds
+    print(f"{s['tiles']} tiles / {s['points']:,} points / {s['extent_km2']} km2 / "
+          f"{s['mean_density']:.2f} pts per m2")
+    print(f"bounds  {lo_x:.1f},{lo_y:.1f} .. {hi_x:.1f},{hi_y:.1f}")
+
+    if args.area:
+        area = _parse_area(args.area)
+        hits = index.query(area)
+        covered = index.coverage(area)
+        print(f"\narea    {area[0]:.1f},{area[1]:.1f} .. {area[2]:.1f},{area[3]:.1f}")
+        print(f"        {len(hits)} tile(s), {covered:.0%} covered, "
+              f"{sum(t.points for t in hits):,} points to read")
+        if covered < 0.999:
+            print(f"        {1 - covered:.0%} of it has no tile behind it")
+        tiles = hits
+    else:
+        tiles = sorted(index.tiles, key=lambda t: -t.density)
+
+    print()
+    for tile in tiles[: args.limit]:
+        print(f"  {Path(tile.path).name:38s} {tile.points:>11,} pts  "
+              f"{tile.density:6.2f}/m2  at {tile.minx:.0f},{tile.miny:.0f}")
+    if len(tiles) > args.limit:
+        print(f"  ... {len(tiles) - args.limit} more")
+    return 0
+
+
 def _cmd_adapters(args) -> int:
     from .ingest import adapters
 
@@ -250,7 +350,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     c = sub.add_parser("compile", help="point cloud -> Spatial IR + backend output")
-    c.add_argument("inputs", nargs="+", help="las/laz/bin/pcd/ply/xyz files")
+    c.add_argument("inputs", nargs="+",
+                   help="las/laz/bin/pcd/ply/xyz files, or a directory to index")
     c.add_argument("-o", "--out", default="build/world")
     c.add_argument("-n", "--name", default=None)
     c.add_argument("-t", "--theme", action="append",
@@ -266,6 +367,9 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--crop", type=float, default=None,
                    help="take a centred square of this many metres; needs no CRS "
                         "knowledge, so it works on whatever tile you were given")
+    c.add_argument("--area", default=None,
+                   help="x,y,size in the source CRS: pick tiles out of an indexed "
+                        "directory and crop to that square. Overridden by --bbox.")
     c.add_argument("--bbox", default=None,
                    help="crop to minx,miny,maxx,maxy in the source CRS "
                         "(a real tile is ~1.5 km square; a block is ~400 m)")
@@ -325,6 +429,14 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--max-tiles", type=int, default=1)
     f.add_argument("--list-only", action="store_true")
     f.set_defaults(func=_cmd_fetch)
+
+    ti = sub.add_parser("tiles", help="index a directory of tiles and query it")
+    ti.add_argument("root", help="directory to scan for las/laz tiles")
+    ti.add_argument("--area", default=None,
+                    help="x,y,size in the source CRS: report which tiles cover it")
+    ti.add_argument("--limit", type=int, default=20)
+    ti.add_argument("--reindex", action="store_true", help="ignore the cached index")
+    ti.set_defaults(func=_cmd_tiles)
 
     a = sub.add_parser("adapters", help="list ingest adapters")
     a.set_defaults(func=_cmd_adapters)

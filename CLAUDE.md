@@ -93,7 +93,8 @@ invariant correctly rejected it — only the point cloud was observed.
 src/lidarworld/
   ingest/       LAS/LAZ, KITTI, PCD, PLY, XYZ behind one adapter interface
   spatial/      sparse voxel indexing, moment aggregation
-  features/     multiscale PCA descriptors, terrain, height above ground
+  features/     multiscale PCA descriptors, terrain, height above ground,
+                pluggable partitioner seam (voxel default, SPT backend)
   semantics/    ASPRS + SemanticKITTI mappings, rule-based inference
   roles/        role taxonomy, context bitmask, CityGML alignment
   segment/      planar region growing, tree/vehicle/pole instancing
@@ -102,7 +103,7 @@ src/lidarworld/
   themes/       packs, resolver, procedural texture backend
   backends/     web, glTF, CityJSON  <- the only place materials exist
   ir/           .lwir reader/writer, SIR v0.1 exporter
-  data/         licence catalogue and tile fetcher
+  data/         licence catalogue, tile fetcher, header-only tile index
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
 viewer/         dependency-free WebGL2 walkthrough
@@ -112,11 +113,12 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 70 tests, ~2s
+python -m pytest tests/ -q                    # 91 tests, ~4s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
 lidarworld fetch denver_lodo -o data/real     # pull a real 3DEP tile
+lidarworld tiles data/real --area x,y,size    # header-only index; what covers this?
 lidarworld compile data/real/*.laz -o build/x --bbox minx,miny,maxx,maxy \
   --theme victorian --theme neon --sir
 lidarworld validate build/x/x.lwir --scan scan.bin

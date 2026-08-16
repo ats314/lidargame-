@@ -106,6 +106,24 @@ lidarworld inspect build/town/townblock.lwir --graph
 lidarworld compile tile.las -o out --gltf --cityjson
 ```
 
+### Working from a directory of tiles
+
+A city is thousands of tiles and you want one block of it. Point `compile` at
+the directory instead of the files and it builds a header-only index — bounds
+and counts, no point decoding — then opens only the tiles the area touches.
+
+```bash
+lidarworld tiles data/real                      # what is on disk
+lidarworld tiles data/real --area 500250,4400250,300   # does it cover this?
+lidarworld compile data/real --area 500250,4400250,300 \
+    -o build/block --tile 0.4 --theme victorian
+```
+
+`--area x,y,size` is a centred square in the source CRS. The index reports how
+much of it any tile actually covers and warns before compiling if the answer is
+less than all of it — a hole in the data is not empty ground, and the world
+should not pretend otherwise.
+
 ## Using real data
 
 The sample tiles are synthetic so the pipeline runs with no downloads, but nothing in it is tuned to them:
@@ -122,7 +140,7 @@ See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for licences and download recip
 src/lidarworld/
   ingest/       adapters: LAS/LAZ, KITTI + SemanticKITTI, PCD, PLY, XYZ
   spatial/      sparse voxel indexing and moment aggregation
-  features/     multiscale descriptors, terrain, height above ground
+  features/     multiscale descriptors, terrain, pluggable partitioner
   semantics/    ASPRS + SemanticKITTI mappings, rule-based inference
   roles/        role taxonomy, context bitmask, CityGML alignment
   segment/      planar region growing, tree/vehicle/pole instancing
@@ -131,6 +149,7 @@ src/lidarworld/
   themes/       theme packs, material resolver, procedural texture backend
   backends/     web, glTF 2.0, CityJSON 1.1
   ir/           Spatial IR reader/writer
+  data/         source catalogue, tile fetcher, header-only tile index
   validate.py   forward LiDAR simulation and consistency scoring
 viewer/         dependency-free WebGL2 first-person viewer
 tools/          sample-data baker, resource-index generator
