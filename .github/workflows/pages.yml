@@ -33,7 +33,7 @@ jobs:
         run: |
           TILE=$(ls data/real/*.laz | head -1)
           lidarworld compile "$TILE" -o viewer/world -n denver_lodo \
-            --crop 350 --tile 0.4 \
+            --crop 350 --tile 0.4 --footprints denver \
             --theme survey --theme victorian --theme neon --sir
           rm -f viewer/world/*.lwir
           du -sh viewer/world

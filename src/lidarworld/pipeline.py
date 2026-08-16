@@ -211,6 +211,15 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         classify_roles(cloud)
         rec.params["histogram"] = role_histogram(cloud)
 
+    # --- footprints (before segmentation: they constrain merging) ---------
+    footprint_rings, footprint_attrs = [], []
+    if config.footprints:
+        with world.stage("footprints", source=config.footprints) as rec:
+            footprint_rings, footprint_attrs = _load_footprints(config.footprints, world, cloud)
+            footprint_rings = [r - world.origin[:2] for r in footprint_rings]
+            rec.notes = f"{len(footprint_rings)} footprint polygons"
+        _log(config, rec.notes or "no footprints returned")
+
     # --- planar segmentation ---------------------------------------------
     with world.stage("segment.planes", voxel=config.plane_voxel) as rec:
         patches = plane_stage.extract(
@@ -218,7 +227,9 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             dist=config.plane_dist, min_voxels=config.min_plane_voxels)
         raw_count = len(patches)
         if config.merge_coplanar:
-            patches = plane_stage.merge_coplanar(patches, cloud)
+            confine = (footprint_stage.assign_patches(patches, footprint_rings)
+                       if footprint_rings else None)
+            patches = plane_stage.merge_coplanar(patches, cloud, groups=confine)
         plane_stage.assign_patch_channel(cloud, patches)
         rec.notes = (f"{len(patches)} planar patches"
                      + (f" (merged from {raw_count})" if len(patches) != raw_count else ""))
@@ -252,15 +263,10 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         adjacency_groups = topology_stage.group_structures(patches, relations)
         structures = adjacency_groups
         footprint_info = ""
-        if config.footprints:
-            rings, foot_attrs = _load_footprints(config.footprints, world, cloud)
-            if not rings:
-                _log(config, f"WARNING: {config.footprints} returned no footprints "
-                             "for this extent; falling back to adjacency grouping")
-            if rings:
-                # Footprints are in the source CRS; the cloud has been shifted.
-                shifted = [r - world.origin[:2] for r in rings]
-                assignment = footprint_stage.assign_patches(patches, shifted)
+        if footprint_rings:
+            rings = footprint_rings
+            if True:
+                assignment = footprint_stage.assign_patches(patches, rings)
                 structures = footprint_stage.group_by_footprint(
                     patches, assignment, adjacency_groups)
                 matched = int((assignment >= 0).sum())

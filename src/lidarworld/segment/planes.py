@@ -238,7 +238,8 @@ def assign_patch_channel(cloud: PointCloud, patches: list[PlanarPatch]) -> np.nd
 
 def merge_coplanar(patches: list[PlanarPatch], cloud: PointCloud, *,
                    angle_deg: float = 10.0, offset_tol: float = 0.30,
-                   gap_tol: float = 2.5) -> list[PlanarPatch]:
+                   gap_tol: float = 2.5,
+                   groups: np.ndarray | None = None) -> list[PlanarPatch]:
     """Fuse patches that are the same physical surface.
 
     Region growing is greedy and stops at any local disturbance -- a balcony, a
@@ -250,6 +251,12 @@ def merge_coplanar(patches: list[PlanarPatch], cloud: PointCloud, *,
     Two patches are the same surface when their normals agree, they lie on the
     same plane, and their extents are close enough to be one wall rather than
     two parallel ones on opposite sides of a building.
+
+    `groups` (one id per patch, -1 for unknown) confines merging to patches
+    already known to belong together. Without it the test is purely geometric,
+    and in a downtown block where flat roofs sit at similar heights it will
+    happily bridge across a street and fuse an entire block into one 11,000 m²
+    plane. Pass footprint assignments here.
     """
     if len(patches) < 2:
         return patches
@@ -268,6 +275,8 @@ def merge_coplanar(patches: list[PlanarPatch], cloud: PointCloud, *,
 
     for i in range(len(patches)):
         for j in range(i + 1, len(patches)):
+            if groups is not None and groups[i] != groups[j]:
+                continue        # different buildings, however aligned they look
             a, b = patches[i], patches[j]
             dot = float(a.normal @ b.normal)
             if abs(dot) < cos_thresh:
