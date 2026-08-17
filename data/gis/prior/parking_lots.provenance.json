@@ -1,0 +1,43 @@
+{
+  "id": "parking_lots",
+  "name": "Parking Lots",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_PARKINGLOTS_A/FeatureServer/139",
+  "role": "prior",
+  "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "Polygon": 303
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Surface lots specifically. LoDo is full of them and they are the commonest false positive for 'flat low building' -- having them enumerated stops the compiler inventing a one-storey box on every asphalt rectangle.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:26+00:00",
+  "fetch_seconds": 0.9,
+  "features": 303,
+  "fields_present": [
+    "COMMENTS",
+    "CREATEDATE",
+    "CREATEUSER",
+    "OBJECTID",
+    "Shape__Area",
+    "Shape__Length",
+    "TYPE",
+    "UNIQUE_ID",
+    "UPDATE_STATUS"
+  ],
+  "bytes": 509226,
+  "sha256": "a6792ee4c78c6c5b3ece411278eea733f83b104110ffa60d443acc98d5a7f9a2",
+  "file": "prior/parking_lots.geojson",
+  "truncated": false
+}

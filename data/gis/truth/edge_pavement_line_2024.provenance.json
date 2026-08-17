@@ -1,0 +1,43 @@
+{
+  "id": "edge_pavement_line_2024",
+  "name": "DRCOG Edge of Pavement Lines 2024",
+  "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_EDGE_PAVEMENT_LINE_TOTAL/MapServer/0",
+  "role": "prior",
+  "epoch": "2024",
+  "withheld": true,
+  "withheld_reason": "surveyed 2024, after the 2020 observation",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polyline",
+  "geometry_returned": {
+    "LineString": 795
+  },
+  "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+  "attribution": "Denver Regional Council of Governments (DRCOG)",
+  "notes": "The same edges as lines, carrying a Curb flag -- which is the one attribute that says whether the pavement steps up here or runs flat, and there is no way to read that off 4 pts/m2 from above.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:50+00:00",
+  "fetch_seconds": 2.4,
+  "features": 795,
+  "fields_present": [
+    "Comments",
+    "CreateDate",
+    "CreateUser",
+    "Curb",
+    "OBJECTID",
+    "SHAPE.STLength()",
+    "Surface",
+    "Unique_ID",
+    "Update_Status"
+  ],
+  "bytes": 1445571,
+  "sha256": "7e35f552a3673d5b7905ed4490b12d0efd4394df8576728abd9bfe42026434a9",
+  "file": "truth/edge_pavement_line_2024.geojson",
+  "truncated": false
+}

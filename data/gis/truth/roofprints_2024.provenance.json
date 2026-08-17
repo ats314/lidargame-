@@ -1,0 +1,46 @@
+{
+  "id": "roofprints_2024",
+  "name": "DRCOG Building Roofprints 2024",
+  "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_BUILDING_ROOFPRINTS_TOTAL/MapServer/0",
+  "role": "prior",
+  "epoch": "2024",
+  "withheld": true,
+  "withheld_reason": "surveyed 2024, after the 2020 observation",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "Polygon": 1839
+  },
+  "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+  "attribution": "Denver Regional Council of Governments (DRCOG)",
+  "notes": "Roofprints, not footprints, which is the distinction that matters here: a roofprint is the roof edge seen from above, and that is exactly the outline airborne returns actually describe. A ground footprint differs from it by the overhang, so matching returns to a footprint charges the compiler for a discrepancy the sensor could never have resolved. Carries Bldg_Height and Ground_Elevation, same schema family as the City's Building Outlines. CAUTION: 1,839 features over the AOI against the City's 1,821, with matching field names -- these are probably one stereocompilation lineage, in which case they do not corroborate each other and only one may be used to score.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:44+00:00",
+  "fetch_seconds": 5.1,
+  "features": 1839,
+  "fields_present": [
+    "Bldg_Height",
+    "Bldg_Type",
+    "Building_ID",
+    "Comments",
+    "CreateDate",
+    "CreateUser",
+    "Ground_Elevation",
+    "OBJECTID",
+    "SHAPE.STArea()",
+    "SHAPE.STLength()",
+    "Source",
+    "Update_Status"
+  ],
+  "bytes": 1699851,
+  "sha256": "aefaf86df79a2fafaa8ceca5c547a91bab1215995990cafa215585d1e559f443",
+  "file": "truth/roofprints_2024.geojson",
+  "truncated": false
+}

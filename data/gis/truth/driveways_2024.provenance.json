@@ -1,0 +1,42 @@
+{
+  "id": "driveways_2024",
+  "name": "DRCOG Driveway Polygons 2024",
+  "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_POLYGON_DRIVEWAYS_TOTAL/MapServer/0",
+  "role": "prior",
+  "epoch": "2024",
+  "withheld": true,
+  "withheld_reason": "surveyed 2024, after the 2020 observation",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "Polygon": 5
+  },
+  "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+  "attribution": "Denver Regional Council of Governments (DRCOG)",
+  "notes": "Where a building meets the street surface. Thin in LoDo (5 over the AOI, it being a downtown grid) and central anywhere residential.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:51+00:00",
+  "fetch_seconds": 0.5,
+  "features": 5,
+  "fields_present": [
+    "Comments",
+    "CreateDate",
+    "CreateUser",
+    "OBJECTID",
+    "SHAPE.STArea()",
+    "SHAPE.STLength()",
+    "Unique_ID",
+    "Update_Status"
+  ],
+  "bytes": 4805,
+  "sha256": "c9fa94a7e11e4a6cb9a95b88aa7ff0d2e997ba6d4e074681c1b11e5da1978576",
+  "file": "truth/driveways_2024.geojson",
+  "truncated": false
+}

@@ -49,6 +49,17 @@ DENVER_TERMS = ("City and County of Denver open data: liability disclaimer, no "
                 "explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES")
 DENVER_ATTRIBUTION = "City and County of Denver, Department of Technology Services"
 
+#: DRCOG's Regional Data Catalog. The portal is a static front end over an
+#: authenticated GraphQL API, so the published terms are not machine-readable
+#: from it; the data itself is served openly and unauthenticated from the ARCGIS
+#: server below. Recorded as found, not as assumed -- and per the ground rules,
+#: not a reason to hold up work.
+DRCOG_ARCGIS = "https://gis.drcog.org/server/rest/services/RDC"
+DRCOG_TERMS = ("DRCOG Regional Data Catalog: served open and unauthenticated; "
+               "explicit terms not retrievable from the portal (JS front end "
+               "over an authenticated API) as probed 2026-08-17")
+DRCOG_ATTRIBUTION = "Denver Regional Council of Governments (DRCOG)"
+
 ROLES = ("input", "prior", "hidden_truth", "later_epoch", "runtime")
 
 #: How independent a layer is from the LiDAR it would be used to check. This is
@@ -74,7 +85,7 @@ INDEPENDENCE = {0: "raw returns", 1: "same-sensor derivative",
 class Layer:
     id: str
     name: str
-    path: str                   # service path, appended to SERVICE
+    path: str                   # service path, appended to `root`
     layer: int
     role: str
     epoch: str                  # acquisition/compilation epoch, or "current"
@@ -84,10 +95,15 @@ class Layer:
     license: str = DENVER_TERMS
     attribution: str = DENVER_ATTRIBUTION
     notes: str = ""
+    #: Publisher plumbing. The City is one ArcGIS Online org serving
+    #: FeatureServers; DRCOG is a self-hosted ArcGIS Server serving MapServers.
+    #: Both answer the same /query, so nothing downstream needs to know which.
+    root: str = SERVICE
+    server: str = "FeatureServer"
 
     @property
     def service(self) -> str:
-        return f"{SERVICE}/{self.path}/FeatureServer"
+        return f"{self.root}/{self.path}/{self.server}"
 
     @property
     def url(self) -> str:
@@ -194,6 +210,153 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
               "same pattern. The natural unit for learning an architectural "
               "family rather than guessing per building.",
     ),
+    Layer(
+        id="survey_lots",
+        name="Survey Lots",
+        path="ODC_ENG_SRVLOTS_A", layer=46,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="The lot grid inside each subdivision. Finer than parcels, which "
+              "get merged and split by ownership -- lots keep the platted "
+              "rhythm that decides how wide a building on this street can be.",
+    ),
+    Layer(
+        id="parking",
+        name="Parking",
+        path="ODC_TRANS_PARKING_A", layer=138,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="Parking areas as polygons. Directly useful: a parking polygon is "
+              "a positive assertion that the ground there is open and paved, "
+              "which is the one thing airborne returns cannot distinguish from "
+              "a flat roof at grade or a demolished lot.",
+    ),
+    Layer(
+        id="parking_lots",
+        name="Parking Lots",
+        path="ODC_TRANS_PARKINGLOTS_A", layer=139,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="Surface lots specifically. LoDo is full of them and they are the "
+              "commonest false positive for 'flat low building' -- having them "
+              "enumerated stops the compiler inventing a one-storey box on "
+              "every asphalt rectangle.",
+    ),
+    Layer(
+        id="parkland",
+        name="DPR Parkland 2026",
+        path="DPR_Parkland_2026", layer=0,
+        role="prior", epoch="2026", geometry="polygon", independence=3,
+        notes="Parks and Recreation's parkland boundaries. The vegetation prior: "
+              "inside a park, tall returns are trees; outside one, on a footprint, "
+              "they are a building. Surveyed 2026, so `manifest()` withholds it "
+              "from a 2020 reconstruction on epoch grounds -- it is a "
+              "generation-mode input, and parkland boundaries barely move.",
+    ),
+
+    # ---- DRCOG regional planimetrics -------------------------------------
+    # The 2024 regional stereocompilation, on DRCOG's own ArcGIS Server. Every
+    # one of these is epoch 2024 and therefore withheld from a 2020
+    # reconstruction automatically -- they are generation-mode inputs, and a
+    # change-detection set against the 2020 scan.
+    Layer(
+        id="roofprints_2024",
+        name="DRCOG Building Roofprints 2024",
+        path="PLANIMETRICS_2024_BUILDING_ROOFPRINTS_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="polygon", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="Roofprints, not footprints, which is the distinction that "
+              "matters here: a roofprint is the roof edge seen from above, "
+              "and that is exactly the outline airborne returns actually "
+              "describe. A ground footprint differs from it by the overhang, "
+              "so matching returns to a footprint charges the compiler for a "
+              "discrepancy the sensor could never have resolved. Carries "
+              "Bldg_Height and Ground_Elevation, same schema family as the "
+              "City's Building Outlines. NOT INDEPENDENT OF THEM: measured, "
+              "not assumed -- 461 of 503 Building_IDs over the AOI are shared "
+              "and the matched polygons have an area ratio of 1.0000. One "
+              "stereocompilation, republished twice. Agreement between them "
+              "corroborates nothing, and only one may be used to score. See "
+              "PUBLISHER_OFFSET.",
+    ),
+    Layer(
+        id="sidewalk_polygons_2024",
+        name="DRCOG Sidewalk Polygons 2024",
+        path="PLANIMETRICS_2024_POLYGON_SIDEWALKS_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="polygon", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="Sidewalks as polygons rather than centrelines, so the width is "
+              "surveyed instead of assumed. The pavement/kerb/carriageway "
+              "split is the part of a street a game world is actually walked "
+              "on, and airborne returns describe it poorly.",
+    ),
+    Layer(
+        id="edge_pavement_polygon_2024",
+        name="DRCOG Edge of Pavement Polygons 2024",
+        path="PLANIMETRICS_2024_EDGE_PAVEMENT_POLYGON_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="polygon", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="The carriageway as a filled surface, with Surface and Type. The "
+              "strongest street geometry available: centrelines say a road "
+              "exists, this says where its edges are.",
+    ),
+    Layer(
+        id="edge_pavement_line_2024",
+        name="DRCOG Edge of Pavement Lines 2024",
+        path="PLANIMETRICS_2024_EDGE_PAVEMENT_LINE_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="polyline", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="The same edges as lines, carrying a Curb flag -- which is the "
+              "one attribute that says whether the pavement steps up here or "
+              "runs flat, and there is no way to read that off 4 pts/m2 from "
+              "above.",
+    ),
+    Layer(
+        id="paved_parking_2024",
+        name="DRCOG Paved Parking 2024",
+        path="PLANIMETRICS_2024_PAVED_PARKING_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="polygon", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="Surveyed rather than inferred parking surface. Same job as the "
+              "City's parking layers and stereocompiled instead of "
+              "administrative, so the two disagree in useful ways.",
+    ),
+    Layer(
+        id="driveways_2024",
+        name="DRCOG Driveway Polygons 2024",
+        path="PLANIMETRICS_2024_POLYGON_DRIVEWAYS_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="polygon", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="Where a building meets the street surface. Thin in LoDo (5 over "
+              "the AOI, it being a downtown grid) and central anywhere "
+              "residential.",
+    ),
+    Layer(
+        id="ramps_2024",
+        name="DRCOG Ramps 2024",
+        path="PLANIMETRICS_2024_RAMPS_TOTAL", layer=0,
+        role="prior", epoch="2024", geometry="point", independence=2,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="Kerb ramps, stereocompiled. The regional counterpart to the "
+              "City's 2022 curb ramps, and a crossing-geometry cue.",
+    ),
+    Layer(
+        id="tip_polygons_2024_2027",
+        name="DRCOG TIP Polygons 2024-2027",
+        path="TIP_POLYGONS_2024_2027", layer=0,
+        role="later_epoch", epoch="2024", geometry="polygon", independence=3,
+        root=DRCOG_ARCGIS, server="MapServer",
+        license=DRCOG_TERMS, attribution=DRCOG_ATTRIBUTION,
+        notes="Funded transport projects for 2024-2027: not a survey of "
+              "anything that existed when the scan was flown, but a record of "
+              "what is about to change. Useful for explaining a disagreement "
+              "between the 2020 returns and the 2024 planimetrics, and never "
+              "evidence about 2020. One feature over the AOI.",
+    ),
 ]}
 
 #: The LiDAR epochs flown over Denver. All airborne -- no ground-level or
@@ -239,6 +402,38 @@ BOULDER_PROBE = {
     "conclusion": "No instance-level vegetation truth is published here. The "
                   "compiler's tree segmentation still has nothing to be scored "
                   "against, which remains the open problem DALES exists to solve.",
+}
+
+
+#: The City and DRCOG publish the same stereocompiled buildings in frames that
+#: differ by a rigid 1.12 m. Measured over the LoDo AOI on 2026-08-17 by
+#: matching the 461 shared Building_IDs: the offset's interquartile range is
+#: 0.4 mm, so this is a datum realisation difference, not survey disagreement.
+#:
+#: It matters because it is comparable to the errors being chased. The height
+#: agreement this repo quotes is a median 1.18 m; a 1.12 m horizontal shift is
+#: the same size, and it lands on every footprint the compiler extrudes.
+#:
+#: Which frame the returns prefer is NOT settled. Scoring in-polygon returns by
+#: whether they sit within 2 m of the stated roof gives 46.5% for the City's
+#: outlines and 45.0% for DRCOG's, and a coarse shift sweep peaks at 47.1%
+#: around (-0.5, +1.0) -- nudged towards DRCOG, but by less than the metric can
+#: resolve. The 3DEP tiles are EPSG:6342, NAD83(2011); both vector layers were
+#: requested as EPSG:26913, plain NAD83, and that is the likeliest source of
+#: the shift. Do not "fix" it by applying this vector until a sharper test says
+#: which end is wrong.
+PUBLISHER_OFFSET = {
+    "measured": "2026-08-17",
+    "aoi": "denver_lodo",
+    "matched_buildings": 461,
+    "drcog_minus_denver_m": (-0.8662, +0.7126),
+    "magnitude_m": 1.1217,
+    "iqr_m": 0.0004,
+    "lidar_prefers": "unresolved",
+    "roof_hit_rate": {"denver_2022": 0.465, "drcog_2024": 0.450,
+                      "best_shift": 0.471, "best_shift_dxdy": (-0.5, 1.0)},
+    "suspected_cause": "vectors requested in EPSG:26913 (NAD83) against 3DEP "
+                       "tiles in EPSG:6342 (NAD83(2011))",
 }
 
 

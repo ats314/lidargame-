@@ -1,0 +1,42 @@
+{
+  "id": "sidewalk_polygons_2024",
+  "name": "DRCOG Sidewalk Polygons 2024",
+  "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_POLYGON_SIDEWALKS_TOTAL/MapServer/0",
+  "role": "prior",
+  "epoch": "2024",
+  "withheld": true,
+  "withheld_reason": "surveyed 2024, after the 2020 observation",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "Polygon": 335
+  },
+  "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+  "attribution": "Denver Regional Council of Governments (DRCOG)",
+  "notes": "Sidewalks as polygons rather than centrelines, so the width is surveyed instead of assumed. The pavement/kerb/carriageway split is the part of a street a game world is actually walked on, and airborne returns describe it poorly.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:46+00:00",
+  "fetch_seconds": 1.7,
+  "features": 335,
+  "fields_present": [
+    "Comments",
+    "CreateDate",
+    "CreateUser",
+    "OBJECTID",
+    "SHAPE.STArea()",
+    "SHAPE.STLength()",
+    "Unique_ID",
+    "Update_Status"
+  ],
+  "bytes": 2265880,
+  "sha256": "e3d5da4df7d5e88250a7c9aa7e4ab804ef277bf0b2cc675e3ef1759b0eb035a4",
+  "file": "truth/sidewalk_polygons_2024.geojson",
+  "truncated": false
+}

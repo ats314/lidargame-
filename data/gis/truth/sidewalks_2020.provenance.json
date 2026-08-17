@@ -1,0 +1,42 @@
+{
+  "id": "sidewalks_2020",
+  "name": "Sidewalk Line 2020",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_SIDEWALKS2020_L/FeatureServer/333",
+  "role": "hidden_truth",
+  "epoch": "2020",
+  "withheld": true,
+  "withheld_reason": "hidden_truth: withheld so a score against it is honest",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polyline",
+  "geometry_returned": {
+    "LineString": 2546
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Stereocompiled from the 2020 DRAPP 4-band RGBIR acquisition at 0.5 ft GSD -- the same year as the LiDAR. Truth for road-edge and kerb recovery, which airborne returns describe poorly.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:33+00:00",
+  "fetch_seconds": 3.9,
+  "features": 2546,
+  "fields_present": [
+    "COMMENTS",
+    "CREATEDATE",
+    "CREATEUSER",
+    "OBJECTID",
+    "Shape__Length",
+    "TYPE",
+    "UNIQUE_ID",
+    "UPDATE_STATUS"
+  ],
+  "bytes": 1311794,
+  "sha256": "2e3f432a57a04696c14b3c1775284ed53e9f813d102fa80c080312f85a6ac86f",
+  "file": "truth/sidewalks_2020.geojson",
+  "truncated": false
+}

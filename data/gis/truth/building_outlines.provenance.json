@@ -1,0 +1,46 @@
+{
+  "id": "building_outlines",
+  "name": "Building Outlines 2022",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PROP_BUILDINGOUTLINES_A/FeatureServer/111",
+  "role": "hidden_truth",
+  "epoch": "2022",
+  "withheld": true,
+  "withheld_reason": "hidden_truth: withheld so a score against it is honest",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "Polygon": 1821
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Stereocompiled from DRAPP imagery, carrying height and ground elevation per building. Independently surveyed, so it is the measuring stick for footprint and height recovery -- which is exactly why the compiler must not be handed it while being scored. The pipeline's --footprints flag deliberately promotes it to 'input'; that is world-generation mode, not reconstruction.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:29+00:00",
+  "fetch_seconds": 3.1,
+  "features": 1821,
+  "fields_present": [
+    "BLDG_HEIGH",
+    "BLDG_TYPE",
+    "BUILDING_I",
+    "COMMENTS",
+    "CREATEDATE",
+    "CREATEUSER",
+    "GROUND_ELE",
+    "OBJECTID",
+    "SOURCE",
+    "Shape__Area",
+    "Shape__Length",
+    "UPDATE_STA"
+  ],
+  "bytes": 1642001,
+  "sha256": "faef5f4c34c369d9a36cdfcd8db9d863f48df8a121fa35b7b037502343ee3335",
+  "file": "truth/building_outlines.geojson",
+  "truncated": false
+}

@@ -28,3 +28,11 @@ shot.mjs
 probe.mjs
 *.png
 !docs/img/*.png
+
+# Acquired GIS vectors: reproducible from data/acquire.py in ~90s, and the
+# tree-canopy neighbourhood polygons alone are 31 MB. The provenance sidecars
+# and manifest are kept -- they are the record of what was fetched, and carry
+# the sha256 to check a refetch against.
+/data/gis/**/*.geojson
+/data/real/extents_*.json
+/data/real/download.log

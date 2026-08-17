@@ -1,0 +1,44 @@
+{
+  "id": "tip_polygons_2024_2027",
+  "name": "DRCOG TIP Polygons 2024-2027",
+  "url": "https://gis.drcog.org/server/rest/services/RDC/TIP_POLYGONS_2024_2027/MapServer/0",
+  "role": "later_epoch",
+  "epoch": "2024",
+  "withheld": true,
+  "withheld_reason": "later_epoch: withheld so a score against it is honest",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "MultiPolygon": 1
+  },
+  "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+  "attribution": "Denver Regional Council of Governments (DRCOG)",
+  "notes": "Funded transport projects for 2024-2027: not a survey of anything that existed when the scan was flown, but a record of what is about to change. Useful for explaining a disagreement between the 2020 returns and the 2024 planimetrics, and never evidence about 2020. One feature over the AOI.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:55+00:00",
+  "fetch_seconds": 1.9,
+  "features": 1,
+  "fields_present": [
+    "OBJECTID",
+    "ProjectName",
+    "ProjectType",
+    "Scope",
+    "Shape.STArea()",
+    "Shape.STLength()",
+    "Sponsor",
+    "TIPID",
+    "TipYear",
+    "url"
+  ],
+  "bytes": 677714,
+  "sha256": "829222ba8c239eda144323544a6f9857bea7ca15a6e3931a03d3eb886aa28d71",
+  "file": "truth/tip_polygons_2024_2027.geojson",
+  "truncated": false
+}
