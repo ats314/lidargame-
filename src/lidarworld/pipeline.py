@@ -56,6 +56,16 @@ class Config:
     min_plane_voxels: int = 12
     #: facade tile size -- this is the resolution of the context mask
     tile: float = 0.25
+    #: Size a roof's lattice from its own sampling density instead of reusing
+    #: the facade cell. Airborne returns cannot fill a 0.25 m roof cell, and the
+    #: holes that leaves are the speckle. Off restores the single-cell
+    #: behaviour, which is what a dense terrestrial scan wants.
+    adaptive_roof_tile: bool = True
+    #: Raw cell occupancy to aim for before closing and hole filling run.
+    roof_tile_occupancy: float = 0.6
+    #: Never coarsen past this, however thin the returns. A roof edge quantised
+    #: to much more than a metre reads as blocky from the air.
+    max_roof_tile: float = 1.0
     #: Fuse patches that are the same physical surface before tiling them.
     #: Without this one facade arrives as several ragged patches.
     merge_coplanar: bool = True
@@ -299,8 +309,18 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                 continue
             pts = cloud.xyz[patch.point_idx]
             ground_z = float(np.percentile(pts[:, 2], 2))
+            # Facades keep the configured cell: they are densely sampled along
+            # a street and the context mask is what earns the resolution. Roofs
+            # are sampled from an aircraft at a few points per metre, so the
+            # same cell leaves most of them empty and the surface comes out
+            # speckled. Size their lattice from what the returns can fill.
+            cell = config.tile
+            if config.adaptive_roof_tile and patch.role.startswith("surface.roof"):
+                cell = lattice_stage.sampling_cell(
+                    patch, pts, floor=config.tile, ceiling=config.max_roof_tile,
+                    target=config.roof_tile_occupancy)
             lat = lattice_stage.build(
-                patch, pts, cell=config.tile, ground_z=ground_z,
+                patch, pts, cell=cell, ground_z=ground_z,
                 extend_to_ground=config.extend_walls_to_ground,
                 # Openings are a facade phenomenon: glass returns nothing at
                 # 905 nm, so an enclosed hole in a wall's returns is a window.
@@ -313,7 +333,24 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                 max_opening_area=config.max_opening_area)
             lattices[patch.id] = lat
             total_openings += len(lat.openings)
+        # How much of each roof's own lattice came out solid. This is the
+        # speckle, as a number: holes that reach a patch border are never
+        # filled, so a roof sampled too finely reports a low fill and looks
+        # like lace. Kept in the record because it is invisible in the tile
+        # count -- speckle and solid surface can carry the same total.
+        roof_fill = [l.solid_count / max(l.occupancy.size, 1)
+                     for p in patches if p.role.startswith("surface.roof")
+                     for l in (lattices.get(p.id),) if l is not None]
         rec.notes = f"{sum(l.solid_count for l in lattices.values()):,} tiles, {total_openings} openings"
+        if roof_fill:
+            mean_fill = float(np.mean(roof_fill))
+            cells = [lattices[p.id].cell for p in patches
+                     if p.role.startswith("surface.roof") and p.id in lattices]
+            rec.params["roofs"] = {"count": len(roof_fill),
+                                   "mean_fill": round(mean_fill, 3),
+                                   "median_cell_m": round(float(np.median(cells)), 2)}
+            rec.notes += (f"; roofs {mean_fill:.0%} solid at a median "
+                          f"{np.median(cells):.2f} m cell")
         if free is not None and (gated_cells or gated_patches):
             rec.params["free_space"] = {"cells_cleared": gated_cells,
                                         "patches_rejected": len(gated_patches),
