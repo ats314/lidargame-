@@ -280,6 +280,37 @@ def bounds(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
     return lo, hi
 
 
+#: Standoffs a comparison actually turns on, in metres from a facade. A city
+#: model that looks superb at 50 m and melts at 1 m is a different product from
+#: one that is flat at every distance, and only a distance series separates them.
+PEDESTRIAN_STANDOFFS = (1.0, 5.0, 20.0, 50.0)
+EYE_HEIGHT_M = 1.7
+
+
+def pedestrian_views(lo: np.ndarray, hi: np.ndarray,
+                     standoffs=PEDESTRIAN_STANDOFFS) -> dict:
+    """Eye-height cameras looking horizontally at the middle of the scene.
+
+    Expressed in metres from the target rather than as a fraction of the scene,
+    so two models of different extent are photographed identically. glTF is
+    Y-up, so y is height and x/z are the ground plane.
+    """
+    centre = (lo + hi) / 2.0
+    ground = float(lo[1])
+    views = {}
+    for standoff in standoffs:
+        eye = np.array([centre[0], ground + EYE_HEIGHT_M, centre[2] + standoff])
+        target = np.array([centre[0], ground + EYE_HEIGHT_M, centre[2]])
+        views[f"{standoff:g}m"] = (eye, target)
+    span = float(np.max(hi - lo))
+    views["oblique12m"] = (
+        np.array([centre[0] - 12.0, ground + EYE_HEIGHT_M, centre[2] + 12.0]),
+        np.array([centre[0], ground + 8.0, centre[2]]))
+    views["overview"] = (
+        centre + np.array([span * 0.5, span * 0.45, span * 0.5]), centre)
+    return views
+
+
 def main() -> int:
     from PIL import Image
 
@@ -289,6 +320,9 @@ def main() -> int:
     ap.add_argument("--out", default="build/shots")
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
+    ap.add_argument("--pedestrian", action="store_true",
+                    help="eye-height cameras at fixed metre standoffs")
+    ap.add_argument("--prefix", default="")
     args = ap.parse_args()
 
     lo, hi = bounds(args.glb)
@@ -298,24 +332,28 @@ def main() -> int:
 
     # glTF is Y-up: y is height, x/z are the ground plane.
     ground = float(lo[1])
-    views = {
-        "overview": (centre + np.array([span * 0.55, span * 0.5, span * 0.55]), centre),
-        "street":   (np.array([centre[0] - span * 0.30, ground + 1.7,
-                               centre[2] - span * 0.30]),
-                     np.array([centre[0], ground + 12.0, centre[2]])),
-        "roofline": (np.array([centre[0] - span * 0.35, ground + span * 0.28,
-                               centre[2] - span * 0.35]),
-                     np.array([centre[0], ground + 10.0, centre[2]])),
-        "facade":   (np.array([centre[0] - span * 0.12, ground + 8.0,
-                               centre[2] - span * 0.12]),
-                     np.array([centre[0], ground + 14.0, centre[2]])),
-    }
+    if args.pedestrian:
+        views = pedestrian_views(lo, hi)
+    else:
+        views = {
+            "overview": (centre + np.array([span * 0.55, span * 0.5, span * 0.55]),
+                         centre),
+            "street":   (np.array([centre[0] - span * 0.30, ground + 1.7,
+                                   centre[2] - span * 0.30]),
+                         np.array([centre[0], ground + 12.0, centre[2]])),
+            "roofline": (np.array([centre[0] - span * 0.35, ground + span * 0.28,
+                                   centre[2] - span * 0.35]),
+                         np.array([centre[0], ground + 10.0, centre[2]])),
+            "facade":   (np.array([centre[0] - span * 0.12, ground + 8.0,
+                                   centre[2] - span * 0.12]),
+                         np.array([centre[0], ground + 14.0, centre[2]])),
+        }
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     for name, (eye, target) in views.items():
         pixels = render(args.glb, eye=eye, target=target,
                         width=args.width, height=args.height)
-        path = out / f"{name}.png"
+        path = out / f"{args.prefix}{name}.png"
         Image.fromarray(pixels).save(path)
         sky = (pixels.reshape(-1, 3) == [24, 28, 34]).all(axis=1).mean()
         print(f"  {path}  {100*(1-sky):.1f}% covered")
