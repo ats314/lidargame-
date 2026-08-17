@@ -93,7 +93,41 @@ def _roads(seed: dict, raster: Raster2D, dtm: np.ndarray) -> np.ndarray:
     return classes
 
 
-def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
+def _upsample(raster, z: np.ndarray, cell: float):
+    """Re-grid the seed's coarse heightfield onto a finer terrain lattice.
+
+    The seed stores terrain at 4 m because that is finer than any street
+    gradient a player feels, and for *height* that is true. It is not true for
+    anything that reads off the terrain classes: a kerb is a sub-metre feature,
+    so on a 4 m grid the "edge of the carriageway" is 42% of the carriageway,
+    and the theme dutifully paints half the street as kerb stone. That is the
+    checkerboard -- not a texture bug, a resolution mismatch between what the
+    seed stores and what the surface rules need.
+
+    Interpolating height up costs nothing in fidelity (it was smooth at 4 m and
+    is smooth at 1 m) and gives the road stamp somewhere to put an edge that is
+    actually an edge.
+    """
+    from ..spatial.grid import Raster2D
+
+    nx, ny = z.shape
+    far = raster.origin + np.array([nx, ny]) * raster.cell
+    fine = Raster2D(raster.origin, far, cell, pad=0)
+    fu = np.linspace(0, nx - 1, fine.nx)
+    fv = np.linspace(0, ny - 1, fine.ny)
+    iu = np.clip(fu.astype(int), 0, nx - 2)
+    iv = np.clip(fv.astype(int), 0, ny - 2)
+    tu = (fu - iu)[:, None]
+    tv = (fv - iv)[None, :]
+    z00 = z[np.ix_(iu, iv)]; z10 = z[np.ix_(iu + 1, iv)]
+    z01 = z[np.ix_(iu, iv + 1)]; z11 = z[np.ix_(iu + 1, iv + 1)]
+    out = (z00 * (1 - tu) * (1 - tv) + z10 * tu * (1 - tv)
+           + z01 * (1 - tu) * tv + z11 * tu * tv)
+    return fine, out.astype(np.float32)
+
+
+def expand(seed: dict, *, tile: float = 0.5, terrain_cell: float = 1.0,
+           roof_pitch: float = 0.0) -> World:
     """Build a World from a seed. Nothing here reads a point cloud."""
     world = World(name=seed.get("name", "generated"), crs=seed.get("crs", ""))
     world.origin = np.asarray(seed.get("origin", [0, 0, 0]), dtype=float)
@@ -108,6 +142,8 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
     }
 
     raster, dtm = _terrain(seed)
+    if terrain_cell and terrain_cell < raster.cell:
+        raster, dtm = _upsample(raster, dtm, terrain_cell)
     classes = _roads(seed, raster, dtm)
 
     builder = mesh_stage.MeshBuilder()
