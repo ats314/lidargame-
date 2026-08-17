@@ -431,8 +431,11 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--plane-voxel", type=float, default=0.6)
     c.add_argument("--decimate", type=int, default=1)
     c.add_argument("--streets", default=None,
+                   # argparse %-expands help text, so a literal percent must be
+                   # doubled: "6% of" reads as the %o format spec and blows up
+                   # the whole `compile --help` screen, not just this line.
                    help="street network for the carriageway: 'denver' or a path to "
-                        "GeoJSON. Intensity finds under 6% of a downtown grid.")
+                        "GeoJSON. Intensity finds under 6%% of a downtown grid.")
     c.add_argument("--footprints", default=None,
                    help="authoritative building footprints: a GeoJSON path, or a "
                         "layer id (e.g. 'denver') fetched for the compiled extent")
