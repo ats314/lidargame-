@@ -124,6 +124,13 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
     quads = mesh_stage.add_terrain(builder, raster, dtm, classes, context,
                                    terrain_stage.ROLE_LOOKUP, 0)
 
+    # Footprints of every building, so a wall can ask whether the next
+    # building is standing against it.
+    neighbours = []
+    for other in seed.get("buildings", []):
+        other_ring = np.asarray(other.get("footprint", []), dtype=float)
+        neighbours.append(other_ring if len(other_ring) >= 4 else None)
+
     walls_made = 0
     for index, building in enumerate(seed.get("buildings", [])):
         ring = np.asarray(building["footprint"], dtype=float)
@@ -143,6 +150,7 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
 
         surfaces = extrude_stage.walls_from_footprint(ring, base, top,
                                                       start_id=walls_made)
+        _mark_party_walls(surfaces, ring, neighbours, index)
         walls_made += len(surfaces)
         for patch in surfaces:
             width, height = patch.extent
@@ -259,6 +267,12 @@ def _fenestrate(lattice, patch, building, index: int) -> None:
     """
     if not patch.role.startswith("surface.wall"):
         return
+    if patch.attrs.get("party_wall"):
+        # A wall built hard against the neighbouring building. In brick cities
+        # these are blank by construction -- you cannot put a window where the
+        # next building is -- and glazing them is what made every block look
+        # like a free-standing office park rather than a terrace.
+        return
     occupancy = lattice.occupancy
     context = lattice.context
     nu, nv = occupancy.shape
@@ -269,10 +283,17 @@ def _fenestrate(lattice, patch, building, index: int) -> None:
 
     rng = np.random.default_rng(abs(hash((building.get("id", index), patch.id))) % (2 ** 32))
     storeys = max(1, int(round(height_m / STOREY_M)))
-    win_w = max(2, int(round(1.4 / cell)))     # ~1.4 m wide
-    win_h = max(2, int(round(1.6 / cell)))     # ~1.6 m tall
-    pier = max(2, int(round(1.6 / cell)))      # wall between windows
-    pitch = win_w + pier
+
+    # A window every 3 m on every wall of every building reads as a
+    # spreadsheet, not a street. Real frontages vary the bay width by building,
+    # and the variation is most of what stops a row of blocks looking stamped.
+    # Deterministic per building, so the street is the same street every run.
+    bay_m = float(rng.uniform(4.2, 7.0))
+    win_frac = float(rng.uniform(0.30, 0.45))   # how much of a bay is glass
+    win_w = max(2, int(round(bay_m * win_frac / cell)))
+    win_h = max(2, int(round(rng.uniform(1.5, 2.1) / cell)))
+    pitch = max(win_w + 2, int(round(bay_m / cell)))
+    pier = pitch - win_w
     if pitch >= nu:
         return
 
@@ -286,7 +307,7 @@ def _fenestrate(lattice, patch, building, index: int) -> None:
         if top >= nv - 1:
             break
         for u0 in range(margin, nu - win_w, pitch):
-            if storey and rng.random() < 0.06:
+            if storey and rng.random() < 0.10:
                 continue           # a blank bay; perfect regularity reads as CGI
             occupancy[u0:u0 + win_w, sill:top] = 0
             # Flag the reveal so a theme can put trim or a lintel on it.
@@ -316,3 +337,33 @@ def _clip_to_footprint(lattice, patch, ring: np.ndarray) -> None:
     world_xy = patch.unproject(uv)[:, :2]
     inside = point_in_polygon(world_xy, ring[:, :2]).reshape(nu, nv)
     lattice.occupancy[~inside] = 0
+
+
+def _mark_party_walls(surfaces, ring: np.ndarray, neighbours, index: int,
+                      probe: float = 0.9) -> None:
+    """Flag walls that stand against another building rather than open air.
+
+    A terrace shares its side walls, and those are blank brick because there is
+    literally another building there. Testing a point just outside the wall's
+    midpoint against every other footprint is enough to tell -- if it lands
+    inside a neighbour, nothing can be seen through that wall.
+    """
+    from ..data.gis import point_in_polygon
+
+    centre = ring[:, :2].mean(axis=0)
+    for patch in surfaces:
+        mid = np.asarray(patch.centroid, dtype=float)[:2]
+        outward = mid - centre
+        norm = float(np.hypot(*outward))
+        if norm < 1e-6:
+            continue
+        sample = (mid + outward / norm * probe)[None, :]
+        for other, other_ring in enumerate(neighbours):
+            if other == index or other_ring is None:
+                continue
+            lo, hi = other_ring[:, :2].min(axis=0), other_ring[:, :2].max(axis=0)
+            if not (lo[0] <= sample[0, 0] <= hi[0] and lo[1] <= sample[0, 1] <= hi[1]):
+                continue
+            if point_in_polygon(sample, other_ring[:, :2])[0]:
+                patch.attrs["party_wall"] = True
+                break
