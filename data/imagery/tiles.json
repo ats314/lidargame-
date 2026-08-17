@@ -1,0 +1,65 @@
+[
+ {
+  "tile": "S1W109b",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/S1W109b.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/S1W109b.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "S1E100a",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/S1E100a.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/S1E100a.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "S1E100b",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/S1E100b.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/S1E100b.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "N1W199d",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/N1W199d.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/N1W199d.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "N1E190c",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/N1E190c.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/N1E190c.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "N1E190d",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/N1E190d.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/N1E190d.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "N1W199b",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/N1W199b.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/N1W199b.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "N1E190a",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/N1E190a.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/N1E190a.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ },
+ {
+  "tile": "N1E190b",
+  "tif": "https://drapparchive.s3.amazonaws.com/2020/N1E190b.tif",
+  "tfw": "https://drapparchive.s3.amazonaws.com/2020/N1E190b.tfw",
+  "date": "20200503",
+  "resolution": "3 Inch, 6 Inch"
+ }
+]

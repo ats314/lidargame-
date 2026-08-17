@@ -36,3 +36,9 @@ probe.mjs
 /data/gis/**/*.geojson
 /data/real/extents_*.json
 /data/real/download.log
+
+# DRAPP orthophoto: 446 MB a tile, nine of them over one AOI. Reproducible from
+# data/imagery/tiles.json, which carries the index and is kept.
+/data/imagery/*.tif
+/data/imagery/*.tfw
+/data/imagery/download.log
