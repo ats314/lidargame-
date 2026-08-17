@@ -167,17 +167,24 @@ were the only thing that had been acquired.
 | layer | size | status |
 |---|---|---|
 | LoD3 textured Area 1 (Innenstadt) | 1.52 GB | ✅ |
-| LoD3 textured Area 2 (Bergedorf) | 1.56 GB | ✅ |
-| LoD3 textured Area 3 (Harburg) | 1.87 GB | ✅ |
-| LoD3 textured Area 5 (Wandsbek) | 3.48 GB | ✅ |
+| LoD3 textured Area 2 (Bergedorf) | 1.56 GB | released |
+| LoD3 textured Area 3 (Harburg) | 1.87 GB | released |
+| LoD3 textured Area 5 (Wandsbek) | 3.48 GB | released |
 | LoD3 textured Area 4 (Altona/west) | 4.50 GB | ✅ |
 | DGM 1 terrain | 2.95 GB | ✅ |
 | ALKIS cadastre | 0.54 GB | ✅ |
 | HH-SIB roads | 0.01 GB | ✅ |
 | DOP20 orthophoto | — | per-AOI via cached WMS |
 
-**Complete: the whole city, 15.4 GB.** Area 4 verified after download — 190
-tiles, 166,443 textures.
+**Acquired complete at 15.4 GB, then trimmed to 9.5 GB.** Area 4 was verified
+after download — 190 tiles, 166,443 textures.
+
+Areas 2, 3 and 5 were released once the working area narrowed to a street
+stretch in Area 1. That is a disk decision, not a data decision: the archive
+server measured 89 MB/s, so the whole 12.9 GB building set came down in minutes
+and restoring any area is `python tools/fetch_hamburg.py --only lod3_area3`.
+Holding 6.9 GB of outer districts to avoid a few minutes of re-download is the
+wrong trade on a fixed allowance.
 
 Room was made by deleting Denver's orthophoto imagery (3.8 GB, 10 GeoTIFF tiles
 plus world files), on instruction. It is re-downloadable from the county, and no
