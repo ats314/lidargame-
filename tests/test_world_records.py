@@ -92,3 +92,40 @@ def test_records_serialise_with_the_spec_field_names():
     assert payload["parameter_hash"]
     assert payload["tier"] == 3
     assert log.to_dict()["repairs"] == [payload]
+
+
+def test_a_resolved_world_can_say_why_a_part_of_it_exists():
+    """A procedural city can produce a building. Only a world that recorded
+    its decisions can say which parts of that building are defensible."""
+    log = RepairLog()
+    log.repair(pass_name="building_closure", tier=3,
+               operation="extrude_envelope_from_footprint",
+               target_entity_id="bldg.0182", epistemic_output_state="inferred",
+               evidence_ids=["footprint.0182", "patch.44"],
+               confidence=0.75, max_displacement=12.9,
+               reason="airborne returns do not describe these facades")
+    proof = log.proof_for("bldg.0182")
+    assert proof["method"] == "tier_3_geometric_constraint"
+    assert proof["epistemic_state"] == "inferred"
+    assert proof["confidence"] == 0.75
+    assert proof["evidence"] == ["footprint.0182", "patch.44"]
+    assert proof["parameter_hash"]
+    assert log.proof_for("bldg.9999") is None, (
+        "an entity nothing repaired has no proof, which is itself an answer")
+
+
+def test_the_proof_reports_the_weakest_step_not_the_strongest():
+    """A wall geometrically closed and then procedurally detailed is only as
+    defensible as its weakest step. Reporting the best one would let a
+    generated facade inherit the confidence of a measured roof."""
+    log = RepairLog()
+    log.repair(pass_name="building_closure", tier=3, operation="close",
+               target_entity_id="b", epistemic_output_state="derived",
+               confidence=0.94)
+    log.repair(pass_name="building_closure", tier=7, operation="fenestration",
+               target_entity_id="b", epistemic_output_state="generated",
+               confidence=0.2)
+    proof = log.proof_for("b")
+    assert proof["epistemic_state"] == "generated"
+    assert proof["method"] == "tier_7_procedural_generation"
+    assert proof["operations"] == 2

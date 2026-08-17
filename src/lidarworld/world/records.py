@@ -228,6 +228,43 @@ class RepairLog:
         self.boundaries.append(record)
         return record
 
+    def proof_for(self, entity_id: str) -> dict | None:
+        """Why this entity exists, and what kind of claim it is.
+
+        The question a resolved world has to be able to answer about any part
+        of itself. It is a lookup rather than an analysis precisely because the
+        answer was recorded when the decision was made -- reconstructing it
+        afterwards from the geometry is the thing that cannot be done.
+
+        Returns None when nothing repaired this entity, which is itself an
+        answer: the entity is whatever the evidence made it, with no completion
+        operation in its history.
+        """
+        records = [r for r in self.repairs if r.target_entity_id == entity_id]
+        if not records:
+            return None
+        # Most speculative operation wins the summary: a wall that was
+        # geometrically closed and then procedurally detailed is only as
+        # defensible as its weakest step.
+        rank = {"derived": 0, "resolved": 1, "inferred": 2, "generated": 3,
+                "unknown": 4}
+        worst = max(records, key=lambda r: (rank.get(r.epistemic_output_state, 9),
+                                            r.tier or 0))
+        return {
+            "entity": entity_id,
+            "method": (f"tier_{worst.tier}_{COMPLETION_TIERS[worst.tier][0]}"
+                       if worst.tier else worst.operation),
+            "operation": worst.operation,
+            "epistemic_state": worst.epistemic_output_state,
+            "confidence": worst.confidence,
+            "reason": worst.reason,
+            "evidence": sorted({e for r in records for e in r.evidence_ids}),
+            "max_displacement_m": worst.max_displacement,
+            "parameter_hash": worst.parameter_hash,
+            "operations": len(records),
+            "repair_ids": [r.id for r in records],
+        }
+
     def summary(self) -> dict:
         by_state: dict[str, int] = {}
         by_pass: dict[str, int] = {}
