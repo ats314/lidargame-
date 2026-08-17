@@ -419,6 +419,221 @@ def complete(facade: "Facade") -> tuple[np.ndarray, np.ndarray, dict]:
     }
 
 
+#: How far in front of the nominal facade plane to accept geometry. A
+#: photogrammetric frontage is bumpy and carries balconies, sills and shopfront
+#: boxes; anything within this band belongs to the facade.
+FACADE_DEPTH_M = 6.0
+
+
+def facade_slabs(mesh, *, vertical_cos: float = 0.35, max_area: float = 5.0,
+                 bearings: int = 24, window_m: float = 40.0) -> list[dict]:
+    """Candidate facade planes, best first, by how much wall faces each way.
+
+    Grouping triangles by their own normals does not work on a reality mesh: a
+    real frontage is bumpy, so its normals scatter far wider than any sensible
+    bin, and a coplanar group came back as 129 scattered triangles covering 4%
+    of the crop it implied. What is stable is the *street* bearing. So this only
+    picks a direction and a position, and the rectifier then renders everything
+    standing in front of that plane, however its triangles happen to be angled.
+    """
+    positions = mesh.positions
+    centroids, areas, normals = [], [], []
+    for group in mesh.groups:
+        block = np.asarray(group.faces).reshape(-1, 3)
+        if not len(block):
+            continue
+        a, b, c = (positions[block[:, i]] for i in range(3))
+        cross = np.cross(b - a, c - a)
+        norm = np.linalg.norm(cross, axis=1)
+        area = norm / 2.0
+        with np.errstate(invalid="ignore", divide="ignore"):
+            unit = cross / np.maximum(norm[:, None], 1e-12)
+        keep = (np.abs(unit[:, 2]) < vertical_cos) & (area <= max_area) & (area > 1e-6)
+        if keep.any():
+            centroids.append(((a + b + c) / 3.0)[keep])
+            areas.append(area[keep])
+            normals.append(unit[keep])
+    if not centroids:
+        return []
+    centroid = np.vstack(centroids)
+    area = np.concatenate(areas)
+    unit = np.vstack(normals)
+
+    out = []
+    for slot in range(bearings):
+        angle = np.pi * slot / bearings
+        normal = np.array([np.cos(angle), np.sin(angle), 0.0])
+        # Only triangles actually facing this way, either side.
+        facing = np.abs(unit @ normal) > 0.55
+        if not facing.any():
+            continue
+        # Settle the facing direction BEFORE deriving the along-axis. Computing
+        # `along` from the unsigned normal and then flipping the normal on the
+        # way out leaves the rectifier deriving an along-axis pointing the other
+        # way, so its window never overlaps the geometry and every candidate is
+        # refused with no error.
+        sign = 1.0 if (unit[facing] @ normal).mean() > 0 else -1.0
+        normal = normal * sign
+        u_axis = np.cross(np.array([0.0, 0.0, 1.0]), normal)
+        u_axis /= np.linalg.norm(u_axis)
+        offset = centroid[facing] @ normal
+        along = centroid[facing] @ u_axis
+        weight = area[facing]
+        # Best 2 m offset bucket, then the best window along the wall.
+        buckets = np.floor(offset / 2.0).astype(np.int64)
+        best_bucket, best_weight = None, 0.0
+        for bucket in np.unique(buckets):
+            total = float(weight[buckets == bucket].sum())
+            if total > best_weight:
+                best_weight, best_bucket = total, int(bucket)
+        if best_bucket is None:
+            continue
+        sel = buckets == best_bucket
+        order = np.argsort(along[sel])
+        a_sorted = along[sel][order]
+        w_sorted = weight[sel][order]
+        best_run, best_span = 0.0, (a_sorted[0], a_sorted[0] + window_m)
+        for i in range(len(a_sorted)):
+            stop = np.searchsorted(a_sorted, a_sorted[i] + window_m, side="right")
+            total = float(w_sorted[i:stop].sum())
+            if total > best_run:
+                best_run = total
+                best_span = (a_sorted[i], a_sorted[i] + window_m)
+            if stop >= len(a_sorted):
+                break
+        out.append({"normal": normal,
+                    "offset": float(np.median(offset[sel])),
+                    "along": best_span, "area_m2": best_run})
+    out.sort(key=lambda d: -d["area_m2"])
+    return out
+
+
+def rectify_mesh(mesh, slab: dict, *, px_per_m: float = DEFAULT_PX_PER_M,
+                 depth_m: float = FACADE_DEPTH_M, max_px: int = 2600
+                 ) -> Facade | None:
+    """Orthographic front-on render of whatever stands in front of a facade plane.
+
+    This is a renderer, not a resampler, and that is the point. A reality mesh
+    has no surfaces to resample -- only triangles at every angle -- so the way
+    to get a facade image is to look at the wall square-on and draw everything
+    within a few metres of it, letting a depth test decide what is in front. A
+    balcony then appears as a balcony rather than being discarded for not lying
+    in the plane.
+    """
+    positions = mesh.positions
+    normal = np.asarray(slab["normal"], dtype=float)
+    normal /= np.linalg.norm(normal)
+    v_axis = np.array([0.0, 0.0, 1.0])
+    u_axis = np.cross(v_axis, normal)
+    if np.linalg.norm(u_axis) < 1e-6:
+        return None
+    u_axis /= np.linalg.norm(u_axis)
+
+    u_lo, u_hi = slab["along"]
+    offset = slab["offset"]
+    width_m = float(u_hi - u_lo)
+    if width_m < 2.0:
+        return None
+
+    # Height comes from the geometry actually inside the window, so the crop is
+    # the wall's own height rather than the whole tile's.
+    inside_v = []
+    triangles = []
+    for index, group in enumerate(mesh.groups):
+        block = np.asarray(group.faces).reshape(-1, 3)
+        if not len(block) or group.image is None:
+            continue
+        tri = positions[block]
+        centre = tri.mean(axis=1)
+        du = centre @ u_axis
+        dn = centre @ normal - offset
+        keep = (du >= u_lo - 1.0) & (du <= u_hi + 1.0) & (dn > -1.5) & (dn < depth_m)
+        if not keep.any():
+            continue
+        triangles.append((index, block[keep]))
+        inside_v.append((tri[keep] @ v_axis).ravel())
+    if not triangles:
+        return None
+    v_all = np.concatenate(inside_v)
+    v_lo = float(np.percentile(v_all, 0.5))
+    v_hi = float(np.percentile(v_all, 99.9))
+    height_m = v_hi - v_lo
+    if height_m < 2.0:
+        return None
+
+    scale = px_per_m
+    if max(width_m, height_m) * scale > max_px:
+        scale = max_px / max(width_m, height_m)
+    out_w = max(1, int(round(width_m * scale)))
+    out_h = max(1, int(round(height_m * scale)))
+
+    image = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    filled = np.zeros((out_h, out_w), dtype=bool)
+    depth = np.full((out_h, out_w), np.inf)
+    cache: dict = {}
+    total_px, total_m2 = 0.0, 0.0
+
+    for group_index, block in triangles:
+        source = mesh.groups[group_index].image
+        if source not in cache:
+            cache[source] = load_atlas(source)
+        atlas = cache[source]
+        atlas_h, atlas_w = atlas.shape[:2]
+        uvs = mesh.uvs[block]
+        for face, uv in zip(block, uvs):
+            tri = positions[face]
+            pu = tri @ u_axis - u_lo
+            pv = tri @ v_axis - v_lo
+            pn = tri @ normal - offset
+            cols = pu * scale
+            rows = (height_m - pv) * scale
+            x0 = max(int(np.floor(cols.min())), 0)
+            x1 = min(int(np.ceil(cols.max())) + 1, out_w)
+            y0 = max(int(np.floor(rows.min())), 0)
+            y1 = min(int(np.ceil(rows.max())) + 1, out_h)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            plane = np.column_stack([cols, rows])
+            ys, xs = np.mgrid[y0:y1, x0:x1]
+            samples = np.column_stack([xs.ravel() + 0.5, ys.ravel() + 0.5])
+            bary = _barycentric(samples, plane[0], plane[1], plane[2])
+            if bary is None:
+                continue
+            w0, w1, w2 = bary
+            inside = (w0 >= -1e-9) & (w1 >= -1e-9) & (w2 >= -1e-9)
+            if not inside.any():
+                continue
+            sel = np.flatnonzero(inside)
+            here = w0[sel] * pn[0] + w1[sel] * pn[1] + w2[sel] * pn[2]
+            rr, cc = np.divmod(sel, x1 - x0)
+            rr, cc = rr + y0, cc + x0
+            nearer = here < depth[rr, cc]
+            if not nearer.any():
+                continue
+            rr, cc, sel = rr[nearer], cc[nearer], sel[nearer]
+            tu = w0[sel] * uv[0, 0] + w1[sel] * uv[1, 0] + w2[sel] * uv[2, 0]
+            tv = w0[sel] * uv[0, 1] + w1[sel] * uv[1, 1] + w2[sel] * uv[2, 1]
+            ax = np.clip((tu * atlas_w).astype(np.int64), 0, atlas_w - 1)
+            ay = np.clip(((1.0 - tv) * atlas_h).astype(np.int64), 0, atlas_h - 1)
+            image[rr, cc] = atlas[ay, ax, :3]
+            filled[rr, cc] = True
+            depth[rr, cc] = here[nearer]
+
+            total_m2 += float(np.linalg.norm(
+                np.cross(tri[1] - tri[0], tri[2] - tri[0])) / 2.0)
+            scaled = uv * np.array([atlas_w, atlas_h])
+            total_px += abs(float(np.cross(scaled[1] - scaled[0],
+                                           scaled[2] - scaled[0]))) / 2.0
+
+    corner = u_lo * u_axis + v_lo * v_axis + offset * normal
+    return Facade(
+        surface_id="mesh_facade", building_id=None, image=image,
+        px_per_m=float(scale), width_m=width_m, height_m=height_m,
+        origin_xyz=corner, u_axis=u_axis, v_axis=v_axis, normal=normal,
+        resolution_px_per_m=float(np.sqrt(total_px / total_m2)) if total_m2 else 0.0,
+        covered=float(filled.mean()))
+
+
 def load_atlas(path: str | Path) -> np.ndarray:
     from PIL import Image
     return np.asarray(Image.open(path).convert("RGB"))
