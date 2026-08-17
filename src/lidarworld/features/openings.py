@@ -313,6 +313,31 @@ class Lattice:
         }
 
 
+def _openness(image) -> tuple[np.ndarray, np.ndarray]:
+    """Openness field and validity mask from a facade crop.
+
+    A window is dark. So is a pixel the flight never saw, and so is the margin a
+    resample slides a facade away from -- and confusing the two makes every
+    uncovered region read as one enormous opening. That is not a small error: the
+    de-warp blacks out up to a metre of rows as it straightens a wall, those rows
+    then score as maximum openness, and the period they corrupt is the same period
+    used to decide whether the de-warp helped. The straightened facade scored
+    *worse* than the crooked one, and the exact inverse warp scored worse still.
+    """
+    arr = np.asarray(image, dtype=np.float64)
+    if arr.max() > 1.5:
+        arr = arr / 255.0
+    valid = arr.sum(axis=2) > 0
+    return np.where(valid, 1.0 - arr.mean(axis=2), 0.0), valid
+
+
+def _profile(field_2d: np.ndarray, valid: np.ndarray, axis: int) -> np.ndarray:
+    """Mean along `axis` over the pixels that carry data."""
+    total = (field_2d * valid).sum(axis=axis)
+    count = valid.sum(axis=axis)
+    return np.where(count > 0, total / np.maximum(count, 1), 0.0)
+
+
 def _phase(signal: np.ndarray, period_m: float, px_per_m: float,
            extent_m: float) -> np.ndarray:
     """Where to start the grid, so it sits on the openings rather than between.
@@ -351,16 +376,19 @@ def lattice(facade, *, mask: np.ndarray | None = None) -> Lattice:
     # Both signals point the same way: larger means more likely an opening. A
     # window is the DARK part of a photograph, so luminance is inverted; a reveal
     # mask is already an openness field.
-    luma = facade.image.astype(np.float64).mean(axis=2)[top:bottom] / 255.0
-    signals = {"luminance": 1.0 - luma}
+    openness, valid = _openness(facade.image)
+    openness, valid = openness[top:bottom], valid[top:bottom]
+    signals = {"luminance": openness}
     if mask is not None and mask.any():
         signals["reveal-depth"] = mask.astype(np.float64)[top:bottom]
 
     def best(axis: int, lo: float, hi: float) -> tuple[float, float, str, np.ndarray]:
-        found = {name: period(field_2d.mean(axis=axis), facade.px_per_m, lo, hi)
-                 for name, field_2d in signals.items()}
+        profiles = {name: _profile(field_2d, valid, axis)
+                    for name, field_2d in signals.items()}
+        found = {name: period(profile, facade.px_per_m, lo, hi)
+                 for name, profile in profiles.items()}
         source = max(found, key=lambda k: found[k][1])
-        return (*found[source], source, signals[source].mean(axis=axis))
+        return (*found[source], source, profiles[source])
 
     bay_m, bay_strength, bay_source, bay_signal = best(0, BAY_MIN_M, BAY_MAX_M)
     storey_m, storey_strength, storey_source, storey_signal = best(
@@ -405,3 +433,219 @@ def openings(facade) -> dict:
         "grid_agreement": round(on_grid / max(len(grid.points), 1), 3),
         "note": "depth is measured; the lattice is derived; placement is inferred",
     }
+
+
+#: Width of the strip used to measure local phase, metres of wall. Wide enough to
+#: average over a window and its pier, narrow enough to follow a droop that
+#: develops over a bay or two.
+PHASE_STRIP_M = 2.0
+
+#: Largest correction the de-warp will apply, as a fraction of the period. Beyond
+#: half a period a displacement is indistinguishable from the next feature along,
+#: so a larger correction is a guess about which cornice is which. Clipping there
+#: and reporting it beats sliding a facade onto the wrong storey.
+MAX_WARP_FRACTION = 0.4
+
+#: A strip whose correlation magnitude falls below this fraction of the median
+#: carries no phase. Dropping them is not tidying -- it is the difference between
+#: measuring a warp and inventing one. On a Helsinki frontage the bay phase sits at
+#: -1.68 rad across nine strips out of ten and the tenth, at a twentieth of the
+#: usual magnitude, read +1.58; unwrapping that produced an 87 px "displacement"
+#: and warping by it took the horizontal period strength from 0.436 down to 0.294.
+#: The facade was straight and the correction bent it.
+MIN_PHASE_CONFIDENCE = 0.4
+
+
+def _local_phase(field_2d: np.ndarray, axis: int, period_px: float,
+                 strip_px: int) -> tuple[np.ndarray, np.ndarray]:
+    """Sub-period displacement of a known period, measured strip by strip.
+
+    For a signal A*cos(2*pi*(r - d)/P), correlating against exp(-2*pi*i*r/P) gives
+    a complex number whose argument is -2*pi*d/P: the phase *is* the displacement,
+    with no peak-finding and no threshold. That matters because tracking individual
+    cornice lines fails exactly where the warp is worst -- the line is smeared, so
+    its peak is ambiguous -- while the phase of the whole strip is not.
+
+    The magnitude of that same complex number is the confidence, and it has to be
+    used. A strip covering a blank pier or an occluded corner has a phase, and the
+    phase is noise.
+
+    Returns (strip centres, displacement in pixels along `axis`).
+    """
+    length = field_2d.shape[axis]
+    other = field_2d.shape[1 - axis]
+    if period_px < 4 or length < 2 * period_px:
+        return np.zeros(0), np.zeros(0)
+    steps = np.arange(length)
+    kernel = np.exp(-2j * np.pi * steps / period_px)
+
+    centres, phases, weights = [], [], []
+    for start in range(0, max(1, other - strip_px // 2), strip_px):
+        stop = min(other, start + strip_px)
+        strip = (field_2d[:, start:stop] if axis == 0 else field_2d[start:stop, :].T)
+        if strip.shape[1] < 2:
+            continue
+        signal = strip.mean(axis=1)
+        signal = signal - signal.mean()
+        z = complex(np.dot(signal, kernel))
+        if abs(z) < 1e-12:
+            continue
+        centres.append((start + stop) / 2.0)
+        phases.append(np.angle(z))
+        weights.append(abs(z) / len(signal))
+    if len(centres) < 3:
+        return np.zeros(0), np.zeros(0)
+
+    centres = np.asarray(centres)
+    phases = np.asarray(phases)
+    weights = np.asarray(weights)
+    keep = weights >= MIN_PHASE_CONFIDENCE * float(np.median(weights))
+    if keep.sum() < 3:
+        return np.zeros(0), np.zeros(0)
+
+    # Unwrap over the strips that carry signal, then interpolate across the ones
+    # that do not. Unwrapping through a noise strip is what turned a straight
+    # facade into a 1.5 m displacement.
+    unwrapped = np.unwrap(phases[keep])
+    displacement = -unwrapped * period_px / (2 * np.pi)
+    # A constant offset is phase, not warp; the lattice's own placement handles it.
+    displacement = displacement - np.median(displacement)
+    limit = MAX_WARP_FRACTION * period_px
+    return centres[keep], np.clip(displacement, -limit, limit)
+
+
+def _shift_along(image: np.ndarray, axis: int, displacement: np.ndarray
+                 ) -> np.ndarray:
+    """Resample, sliding each line of `image` along `axis` by `displacement`.
+
+    Linear interpolation, and out-of-range samples come back black rather than
+    clamped: a de-warp that slides a facade up by half a metre has half a metre it
+    genuinely does not have, and painting the edge row into it would invent
+    masonry.
+    """
+    work = image if axis == 0 else np.swapaxes(image, 0, 1)
+    rows, cols = work.shape[0], work.shape[1]
+    out = np.zeros_like(work, dtype=np.float64)
+    grid = np.arange(rows, dtype=np.float64)
+    for col in range(cols):
+        source = grid + displacement[col]
+        inside = (source >= 0) & (source <= rows - 1)
+        lane = np.asarray(work[:, col], dtype=np.float64)
+        if lane.ndim == 1:
+            out[inside, col] = np.interp(source[inside], grid, lane)
+        else:
+            for channel in range(lane.shape[1]):
+                out[inside, col, channel] = np.interp(
+                    source[inside], grid, lane[:, channel])
+    return out if axis == 0 else np.swapaxes(out, 0, 1)
+
+
+def dewarp(facade, grid: "Lattice | None" = None) -> tuple[np.ndarray, dict]:
+    """Straighten a facade against its own measured rhythm.
+
+    This is the answer to the warping in a photogrammetric wall, and worth being
+    precise about what it does and does not fix.
+
+    The warp is geometric. An airborne camera sees a vertical wall at a grazing
+    angle, so depth along the view ray is barely constrained and the surface sags
+    between the few points that are; the photograph is glued to those sagging
+    vertices, and at a grazing angle a depth error slides a feature *along* the
+    wall. That is why a straight cornice comes out drooping. Re-projecting onto a
+    better plane does not help, because an orthographic projection preserves
+    in-plane position -- the error is already in-plane.
+
+    What does help is knowing that the thing being distorted is periodic. The bay
+    and storey periods are measured, and a real cornice is straight, so the local
+    phase of that period is a direct measurement of the local displacement. Undoing
+    it straightens the cornices and the window rows because they were straight.
+
+    Returns the corrected image and what was corrected. Never silently: the report
+    carries the RMS displacement removed and the period strength before and after,
+    so a facade this cannot help shows up as a number rather than as a smear.
+    """
+    if grid is None:
+        grid = lattice(facade)
+    top, bottom = grid.band if grid.band[1] > grid.band[0] else (0, facade.image.shape[0])
+    image = np.asarray(facade.image, dtype=np.float64)
+    openness, valid = _openness(image)
+    band, band_valid = openness[top:bottom], valid[top:bottom]
+
+    report: dict = {"storey_m": round(grid.storey_m, 3),
+                    "bay_m": round(grid.bay_m, 3),
+                    "wall_band_rows": [top, bottom]}
+    out = image
+    for axis, period_m, name in ((0, grid.storey_m, "vertical"),
+                                 (1, grid.bay_m, "horizontal")):
+        period_px = period_m * facade.px_per_m
+        strip_px = max(4, int(round(PHASE_STRIP_M * facade.px_per_m)))
+        centres, displacement = _local_phase(band * band_valid, axis,
+                                             period_px, strip_px)
+        if not len(centres):
+            report[name] = {"applied": False, "reason": "no measurable phase"}
+            continue
+        span = out.shape[1 - axis]
+        # The strips are indexed within the wall band. For the horizontal pass
+        # they run over the band's ROWS, so they have to be lifted back into the
+        # image's own rows before the shift is applied -- otherwise every
+        # displacement lands `top` rows too high. On this facade that was 203 rows,
+        # and it read as the correction making the facade worse.
+        offset = top if axis == 1 else 0
+        full = np.interp(np.arange(span), centres + offset, displacement)
+        rms_m = float(np.sqrt(np.mean(displacement ** 2))) / facade.px_per_m
+
+        # A correction finer than the source's own pixel is not a correction. The
+        # crop is upsampled from 13 px/m to 48, so a 4 cm shift is a fifth of a
+        # source pixel -- there is no information at that scale, and resampling for
+        # it only spends sharpness. Measured: the horizontal warp on this facade is
+        # 4.4 cm RMS, and "correcting" it took the horizontal period strength from
+        # 0.438 to 0.367 through interpolation blur alone.
+        floor_m = 1.0 / max(facade.resolution_px_per_m, 1e-6)
+        if rms_m < floor_m:
+            report[name] = {
+                "applied": False,
+                "reason": f"measured warp {rms_m:.3f} m is below the source's "
+                          f"own {floor_m:.3f} m pixel",
+                "rms_m": round(rms_m, 4),
+                "strips": len(centres),
+            }
+            continue
+
+        def strength(field_2d, mask_2d):
+            return float(period(_profile(field_2d, mask_2d, 1 - axis),
+                                facade.px_per_m,
+                                period_m * 0.6, period_m * 1.6)[1])
+
+        before = strength(band, band_valid)
+        candidate = _shift_along(out, axis, full)
+        # Recomputed from the shifted image, so the rows the resample vacated are
+        # excluded rather than counted as maximally open.
+        moved, moved_valid = _openness(candidate)
+        moved, moved_valid = moved[top:bottom], moved_valid[top:bottom]
+        after = strength(moved, moved_valid)
+
+        record = {
+            "rms_px": round(float(np.sqrt(np.mean(displacement ** 2))), 2),
+            "rms_m": round(rms_m, 3),
+            "peak_m": round(float(np.abs(displacement).max()
+                                  / facade.px_per_m), 3),
+            "strips": len(centres),
+            "strength_before": round(before, 3),
+            "strength_after": round(after, 3),
+            "clipped_at_m": round(MAX_WARP_FRACTION * period_m, 2),
+        }
+
+        # Apply only if it helped, and check rather than predict. Whether the warp
+        # model fits a given facade is not knowable in advance -- it fits a strongly
+        # rhythmic frontage and not a weakly rhythmic one, and on a weak facade the
+        # phase is noise and the "correction" bends a straight wall. The acceptance
+        # test is the same number the caller cares about, and it is already computed:
+        # 673497d1 gains 0.404 -> 0.488 vertically, while 672496a1 loses 0.258 ->
+        # 0.126 horizontally and is reverted.
+        if after > before:
+            out, band, band_valid = candidate, moved, moved_valid
+            record["applied"] = True
+        else:
+            record["applied"] = False
+            record["reason"] = "correction did not improve the period; reverted"
+        report[name] = record
+    return np.clip(out, 0, 255).astype(np.uint8), report

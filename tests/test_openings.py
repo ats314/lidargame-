@@ -261,3 +261,137 @@ def test_grid_points_sit_on_the_dark_openings_not_the_bright_piers():
     nearest = [min(abs(p - c) for c in centres) for p in placed if 0 <= p < cols]
     assert np.median(nearest) < 0.5 * px, (
         f"grid at {np.round(placed, 1)} against windows at {centres}")
+
+
+# --- de-warping ---------------------------------------------------------------
+#
+# An airborne camera sees a vertical wall at a grazing angle, so depth along the
+# view ray is barely constrained and the surface sags; the photograph is glued to
+# those sagging vertices and a straight cornice comes out drooping. The period is
+# measured and a real cornice is straight, so the local phase of that period
+# measures the displacement directly.
+#
+# Everything here guards against the correction being worse than the defect, which
+# is what every intermediate version of it was.
+
+def striped(rows=400, cols=800, px=20.0, storey_px=60, bay_px=70, warp=None):
+    """A periodic facade, optionally with each column slid vertically."""
+    image = np.full((rows, cols, 3), 210, dtype=np.uint8)
+    for r in range(storey_px // 2, rows, storey_px):
+        for c in range(bay_px // 2, cols, bay_px):
+            image[r - 10:r + 10, c - 12:c + 12] = 35
+    if warp is None:
+        return image
+    out = np.zeros_like(image)
+    grid = np.arange(rows)
+    for c in range(cols):
+        source = np.clip(grid + warp[c], 0, rows - 1)
+        out[:, c] = image[source.astype(int), c]
+    return out
+
+
+def rhythmic(image, px=20.0, source_px=None):
+    return facade(image=image, px_per_m=px,
+                  depth=np.full(image.shape[:2], 10.0)) if source_px is None else \
+        Facade(surface_id="t", building_id=None, image=image, px_per_m=px,
+               width_m=image.shape[1] / px, height_m=image.shape[0] / px,
+               origin_xyz=np.zeros(3), u_axis=np.array([1.0, 0.0, 0.0]),
+               v_axis=np.array([0.0, 0.0, 1.0]), normal=np.array([0.0, -1.0, 0.0]),
+               resolution_px_per_m=source_px, covered=1.0,
+               depth=np.full(image.shape[:2], 10.0))
+
+
+def test_a_drooping_facade_is_straightened():
+    """The claim, as a number: the storey period reads more strongly after."""
+    cols = 800
+    droop = 22.0 * np.sin(np.linspace(0, np.pi, cols))       # 1.1 m sag mid-wall
+    crop = rhythmic(striped(cols=cols, warp=droop), source_px=20.0)
+    _, report = op.dewarp(crop)
+    assert report["vertical"]["applied"] is True, report["vertical"]
+    assert report["vertical"]["strength_after"] > report["vertical"]["strength_before"]
+    assert report["vertical"]["rms_m"] > 0.2
+
+
+def test_a_straight_facade_is_left_alone():
+    """No warp to remove means none removed. Guards against inventing one."""
+    crop = rhythmic(striped(), source_px=20.0)
+    fixed, report = op.dewarp(crop)
+    assert report["vertical"]["applied"] is False
+    assert report["horizontal"]["applied"] is False
+
+
+def test_a_correction_finer_than_the_source_pixel_is_refused():
+    """The crop is upsampled; below one source pixel there is no information.
+
+    Measured on a Helsinki facade: a 4.4 cm horizontal "warp" against a 7.6 cm
+    source pixel, and applying it cost 0.438 -> 0.367 of period strength in
+    interpolation blur alone.
+    """
+    cols = 800
+    tiny = 0.6 * np.sin(np.linspace(0, np.pi, cols))         # 3 cm at 20 px/m
+    crop = rhythmic(striped(cols=cols, warp=tiny), source_px=4.0)   # 25 cm pixels
+    _, report = op.dewarp(crop)
+    assert report["vertical"]["applied"] is False
+    assert "below the source" in report["vertical"]["reason"]
+
+
+def test_a_correction_that_does_not_help_is_reverted():
+    """Whether the warp model fits a facade is checked, not predicted.
+
+    On a weakly rhythmic wall the phase is noise and the correction bends a
+    straight facade: 672496a1 went 0.258 -> 0.126 horizontally and is reverted.
+    """
+    rng = np.random.default_rng(4)
+    noise = (rng.random((400, 800, 3)) * 255).astype(np.uint8)
+    crop = rhythmic(noise, source_px=20.0)
+    fixed, report = op.dewarp(crop)
+    for axis in ("vertical", "horizontal"):
+        if report[axis].get("strength_after") is not None:
+            assert report[axis]["applied"] == (
+                report[axis]["strength_after"] > report[axis]["strength_before"])
+    assert fixed.shape == noise.shape
+
+
+def test_a_blank_strip_cannot_produce_a_metre_of_displacement():
+    """The bug this replaced, and it made a straight facade crooked.
+
+    A strip covering a blank pier has a phase and the phase is noise. Unwrapping
+    through it turned one bad strip into an 87 px displacement, and warping by it
+    took the horizontal period strength from 0.436 to 0.294.
+    """
+    image = striped(cols=800)
+    image[:, 300:400] = 210                     # a blank stretch: no rhythm at all
+    crop = rhythmic(image, source_px=20.0)
+    _, report = op.dewarp(crop)
+    rms = report["vertical"].get("rms_m") or 0.0
+    assert rms < 0.5, f"a blank strip produced {rms:.2f} m of warp"
+
+
+def test_resampling_off_the_edge_leaves_black_not_smeared_masonry():
+    """A shift up by half a metre has half a metre it does not have."""
+    image = striped(cols=200)
+    shifted = op._shift_along(image.astype(float), 0, np.full(200, -40.0))
+    assert shifted[:20].max() == 0.0, "the vacated rows must be empty"
+    assert shifted[100:120].max() > 0.0
+
+
+def test_the_horizontal_pass_uses_image_rows_not_band_rows():
+    """Strips are indexed inside the wall band and applied to the whole image.
+
+    Missing the offset put every horizontal displacement 203 rows too high on the
+    real facade, which read as the correction making it worse.
+    """
+    rows, cols = 400, 800
+    image = striped(rows=rows, cols=cols)
+    depth = np.full((rows, cols), 10.0)
+    depth[:80] = 16.0                            # roof: outside the wall band
+    crop = Facade(surface_id="t", building_id=None, image=image, px_per_m=20.0,
+                  width_m=cols / 20.0, height_m=rows / 20.0,
+                  origin_xyz=np.zeros(3), u_axis=np.array([1.0, 0.0, 0.0]),
+                  v_axis=np.array([0.0, 0.0, 1.0]),
+                  normal=np.array([0.0, -1.0, 0.0]),
+                  resolution_px_per_m=20.0, covered=1.0, depth=depth)
+    grid = op.lattice(crop)
+    assert grid.band[0] >= 60, f"wall band started at {grid.band[0]}"
+    fixed, report = op.dewarp(crop, grid)
+    assert fixed.shape == image.shape
