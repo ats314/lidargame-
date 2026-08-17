@@ -22,6 +22,33 @@ from ..types import SEMANTIC_INDEX, PointCloud
 S = SEMANTIC_INDEX
 
 
+#: A car is about 8 m2 and roughly the shape a kerb, a planter or a loading pad
+#: also makes from above. Separating them needs enough returns to resolve the
+#: 1.4 m step up to a roof, which airborne acquisitions do not have: measured
+#: over the Denver block, `density` in the vehicle height band peaks at 0.98
+#: against the 1.0 the original rule demanded.
+#:
+#: The threshold below is the original one. What changed is that failing it is
+#: now a deliberate refusal with a measurement behind it, rather than a
+#: comparison that silently could not succeed.
+VEHICLE_MIN_DENSITY = 1.0
+
+
+def _density_supports_vehicles(density, hag) -> bool:
+    """Whether this cloud is dense enough for vehicle inference to mean anything.
+
+    Returns False for airborne acquisitions, which is the honest answer: at
+    3.6 pts/m2 the candidate set is 6% cars and 94% street furniture, and a
+    wrong permanent object is harder to notice than an absent one.
+    """
+    import numpy as _np
+
+    band = (hag > 0.3) & (hag < 2.6)
+    if not band.any():
+        return False
+    return bool(_np.percentile(density[band], 90) >= VEHICLE_MIN_DENSITY)
+
+
 def infer(cloud: PointCloud, *, overwrite: bool = False) -> PointCloud:
     """Fill in `semantic` (and `semantic_confidence`) from geometry."""
     cloud.require("hag", "planarity", "sphericity", "linearity", "verticality", "density")
@@ -112,7 +139,36 @@ def infer(cloud: PointCloud, *, overwrite: bool = False) -> PointCloud:
         assign(scattered & (hag > 0.35), "vegetation_low", 0.6)
 
     # Compact, low, semi-planar blobs sitting on the ground -> vehicles.
-    assign((hag > 0.3) & (hag < 2.6) & (planarity > 0.3) & (density > 1.0), "vehicle", 0.4)
+    #
+    # This rule required `density > 1.0` and therefore could never fire on
+    # airborne data: `density` is count/(scale^3 * 27), and over the Denver
+    # block the *maximum* in this height band is 0.98. That is not a tuning
+    # problem, it is a structurally unsatisfiable test -- the threshold came
+    # from terrestrial scans at hundreds of points per square metre, where it
+    # is fine, and nothing said so.
+    #
+    # Removing it does not produce vehicles. Measured on the LoDo block: the
+    # planar, unscattered, 0.3-2.6 m candidates cluster into 451 objects of
+    # which 26 are car-shaped -- 6% precision, and tightening the height band
+    # does not help (5% at hag>0.8, 5% at hag>1.0, 2% at hag>1.2). The
+    # candidates are kerbs, planters, steps and loading pads: median cluster
+    # 5.6 x 4.9 m and 0.6 m tall, which is not a car.
+    #
+    # So the honest output is no vehicles, and the difference that matters is
+    # that it is now a refusal rather than an accident. At 3.6 pts/m2 a car is
+    # ~24 returns spread over a shape a kerb also makes, and enabling this
+    # would fossilise 94% false positives into the static world -- which is
+    # worse than missing them, because a wrong permanent object is harder to
+    # notice than an absent one.
+    #
+    # What would change the answer, in order of cost: gating candidates on the
+    # acquired pavement and parking polygons (a first pass put 63 of 83
+    # car-sized clusters inside one, so the context does discriminate);
+    # mobile or terrestrial LiDAR, where the original density test works as
+    # written; or imagery.
+    if _density_supports_vehicles(density, hag):
+        assign((hag > 0.3) & (hag < 2.6) & (planarity > 0.3) & ~scattered,
+               "vehicle", 0.4)
 
     # Low remaining structure is most likely fencing.
     assign((hag > 0.3) & (hag < 2.5) & (verticality > 0.6), "fence", 0.4)

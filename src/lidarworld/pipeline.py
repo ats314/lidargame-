@@ -418,7 +418,17 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
     with world.stage("segment.instances") as rec:
         chm = ground_stage.canopy_height_model(cloud, raster, dtm)
         trees = instance_stage.trees(cloud, raster, chm) if config.instance_trees else []
-        vehicles = instance_stage.cluster(cloud, ("vehicle",), "instance.vehicle", voxel=0.9)
+        # A car is about 8 m2. At this block's own sampling density that is
+        # 8*d returns, and demanding a fixed 24 of them rejects most cars on
+        # airborne data -- the same absolute-threshold mistake that made the
+        # vehicle rule itself dead. Scale the requirement to the sensor.
+        xy = cloud.xyz[:, :2]
+        occupied = len(np.unique(np.floor(xy).astype(np.int64), axis=0))
+        pts_per_m2 = len(cloud) / max(occupied, 1)
+        car_returns = max(6, int(0.6 * 8.0 * pts_per_m2))
+        vehicles = instance_stage.cluster(cloud, ("vehicle",), "instance.vehicle",
+                                          voxel=0.9, min_points=car_returns)
+        rec.params["vehicle_min_points"] = car_returns
         poles = instance_stage.poles(cloud)
         rec.notes = f"{len(trees)} trees, {len(vehicles)} vehicles, {len(poles)} poles"
     _log(config, rec.notes)
