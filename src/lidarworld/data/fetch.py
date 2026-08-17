@@ -80,9 +80,7 @@ def fetch_place(place_id: str, out_dir: str | Path, *, max_tiles: int = 1,
     if not source.commercial:
         raise ValueError(f"{source.id} is not cleared for commercial use")
 
-    tiles = resolve_tiles(place["bbox_wgs84"], prefer_project=place.get("project"))
-    if not tiles:
-        raise RuntimeError(f"no tiles returned for {place_id}")
+    tiles = resolve_place_tiles(place, place_id)
 
     out_dir = Path(out_dir)
     paths = []
@@ -90,3 +88,39 @@ def fetch_place(place_id: str, out_dir: str | Path, *, max_tiles: int = 1,
         name = Path(urllib.parse.urlparse(tile["url"]).path).name
         paths.append(download(tile["url"], out_dir / name, progress=progress))
     return paths
+
+
+def resolve_place_tiles(place: dict, place_id: str) -> list[dict]:
+    """Tiles covering a place, deterministically where the extents are published.
+
+    The National Map answers a bbox query with whatever overlapping tiles it
+    holds, newest first, and "newest" is a tie among tiles from one flight. That
+    makes `fetch <place>` return a different tile between runs, which is fine
+    until a build pins an area inside the tile it happened to get.
+
+    The acquisition's published extents remove the ambiguity: they carry an
+    exact bbox per tile, so the tile whose centre is nearest the place is a
+    stable answer. TNM stays as the fallback for places with no index.
+    """
+    acquisition = place.get("acquisition")
+    if acquisition:
+        try:
+            from .catalog_index import RemoteIndex
+
+            index = RemoteIndex.load(acquisition)
+            west, south, east, north = place["bbox_wgs84"]
+            hits = index.query((west, south, east, north))
+            if hits:
+                cx, cy = (west + east) / 2, (south + north) / 2
+                hits.sort(key=lambda t: (((t.west + t.east) / 2 - cx) ** 2
+                                         + ((t.south + t.north) / 2 - cy) ** 2))
+                return [{"title": t.id, "url": t.url, "published": t.end,
+                         "bytes": 0, "format": "LAZ"} for t in hits]
+        except Exception as exc:                       # network, parse, anything
+            print(f"  published extents unavailable ({type(exc).__name__}), "
+                  f"falling back to The National Map", flush=True)
+
+    tiles = resolve_tiles(place["bbox_wgs84"], prefer_project=place.get("project"))
+    if not tiles:
+        raise RuntimeError(f"no tiles returned for {place_id}")
+    return tiles

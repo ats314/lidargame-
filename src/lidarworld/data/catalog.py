@@ -333,6 +333,11 @@ def describe(source_id: str) -> Source:
 PLACES: dict[str, dict] = {
     "denver_lodo": {
         "source": "usgs_3dep",
+        # The published extents index resolves this to an exact tile. Without
+        # it, The National Map answers a bbox query with any overlapping tile
+        # and the answer moves between runs -- which broke the Pages deploy
+        # when CI got a different tile than the one the demo was tuned on.
+        "acquisition": "co_drcog_2020_b2",
         "bbox_wgs84": (-105.002, 39.740, -104.985, 39.755),
         "description": "Denver LoDo / Union Station, CO. Dense downtown grid.",
         "project": "CO_DRCOG_2020_B20",
@@ -341,6 +346,7 @@ PLACES: dict[str, dict] = {
     },
     "denver_capitol": {
         "source": "usgs_3dep",
+        "acquisition": "co_drcog_2020_b2",
         "bbox_wgs84": (-104.990, 39.735, -104.980, 39.745),
         "description": "Colorado State Capitol and Civic Center, Denver.",
         "project": "CO_DRCOG_2020_B20",

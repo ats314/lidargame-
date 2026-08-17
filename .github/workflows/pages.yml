@@ -32,10 +32,13 @@ jobs:
       - name: Compile a block of it into the viewer
         run: |
           lidarworld tiles data/real
+          # A centred crop rather than a pinned --area: the demo must survive
+          # whichever tile the fetch returns, and a hardcoded box inside one
+          # tile is exactly what broke this deploy before.
           lidarworld compile data/real -o viewer/world -n denver_lodo \
-            --area 500250,4400250,320 --tile 0.3 \
+            --crop 320 --tile 0.3 \
             --footprints denver --streets denver \
-            --theme survey --theme victorian --theme neon --sir
+            --theme survey --theme victorian --theme neon --sir --seed
           rm -f viewer/world/*.lwir
           du -sh viewer/world
       # enablement lets the workflow turn Pages on itself. If the repository
