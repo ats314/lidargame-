@@ -194,6 +194,69 @@ def master_city_plan() -> list[dict]:
     return plan
 
 
+#: Tile naming decodes to kilometre coordinates in both layers, which is what
+#: turns "what covers this point" into a lookup instead of a spatial query.
+#:
+#:     buildings   6534                    E 565-566 km, N 5934-5935 km, 1 km
+#:     terrain     DGM1_32564_5934_2_FHH   E 564-566 km, N 5934-5936 km, 2 km
+#:
+#: The terrain easting carries the UTM zone as a prefix (32), which has to come
+#: off before it is a coordinate. One terrain tile covers exactly four building
+#: tiles.
+BUILDING_TILE_M = 1000
+TERRAIN_TILE_M = 2000
+UTM_ZONE = 32
+
+
+def building_tile(x: float, y: float) -> str:
+    """The LoD3 tile id covering a point, e.g. 565648, 5934179 -> '6534'."""
+    return f"{int(x // BUILDING_TILE_M) % 100:02d}{int(y // BUILDING_TILE_M) % 100:02d}"
+
+
+def terrain_tile(x: float, y: float) -> str:
+    """The DGM 1 member name covering a point."""
+    east = int(x // TERRAIN_TILE_M) * (TERRAIN_TILE_M // 1000)
+    north = int(y // TERRAIN_TILE_M) * (TERRAIN_TILE_M // 1000)
+    return f"DGM1_{UTM_ZONE}{east}_{north}_2_FHH.xyz"
+
+
+def read_dgm(archive: str | Path, tile: str):
+    """One DGM 1 tile as (origin_xy, cell, z-grid), z indexed [x, y].
+
+    The file is 4 million ASCII triples and `np.loadtxt` takes about a minute on
+    it, which is a minute per tile of a 243 tile city. `np.frombuffer` on the
+    whitespace-separated text is the same parse in about a second.
+
+    Posts sit on half-metre centres -- 549991.50, not 549991.0 -- so the origin
+    is the first post, not the tile corner. Getting that wrong shifts the whole
+    terrain half a metre against the buildings, which is the same order as the
+    offset we are trying to measure.
+    """
+    import numpy as np
+
+    with zipfile.ZipFile(archive) as handle:
+        name = next((n for n in handle.namelist() if n.endswith(tile)), None)
+        if name is None:
+            raise KeyError(f"{tile} not in {archive}")
+        raw = handle.read(name)
+    flat = np.array(raw.split(), dtype=np.float64).reshape(-1, 3)
+
+    origin = flat[:, :2].min(axis=0)
+    span = flat[:, :2].max(axis=0) - origin
+    # Posts are on a 1 m grid; derive it rather than assuming, so a 0.5 m or
+    # 2 m product does not silently come out scrambled.
+    nx = int(round(span[0])) + 1
+    ny = int(round(span[1])) + 1
+    cell = float(span[0] / (nx - 1)) if nx > 1 else 1.0
+
+    grid = np.full((nx, ny), np.nan, dtype=np.float32)
+    ix = np.rint((flat[:, 0] - origin[0]) / cell).astype(np.int64)
+    iy = np.rint((flat[:, 1] - origin[1]) / cell).astype(np.int64)
+    inside = (ix >= 0) & (ix < nx) & (iy >= 0) & (iy < ny)
+    grid[ix[inside], iy[inside]] = flat[inside, 2]
+    return origin, cell, grid
+
+
 class _HttpFile(io.RawIOBase):
     """Enough of a seekable file for `zipfile` to work over HTTP ranges.
 

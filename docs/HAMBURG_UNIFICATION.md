@@ -170,15 +170,23 @@ were the only thing that had been acquired.
 | LoD3 textured Area 2 (Bergedorf) | 1.56 GB | ✅ |
 | LoD3 textured Area 3 (Harburg) | 1.87 GB | ✅ |
 | LoD3 textured Area 5 (Wandsbek) | 3.48 GB | ✅ |
-| LoD3 textured Area 4 (Altona/west) | 4.2 GB | ❌ over disk budget |
+| LoD3 textured Area 4 (Altona/west) | 4.50 GB | ✅ |
 | DGM 1 terrain | 2.95 GB | ✅ |
 | ALKIS cadastre | 0.54 GB | ✅ |
 | HH-SIB roads | 0.01 GB | ✅ |
 | DOP20 orthophoto | — | per-AOI via cached WMS |
 
-Area 4 needs about 4.2 GB against 5.8 GB free, and taking it would leave no room
-to build. It is the last area needed for a demo — Altona and the west, not the
-historic core.
+**Complete: the whole city, 15.4 GB.** Area 4 verified after download — 190
+tiles, 166,443 textures.
+
+Room was made by deleting Denver's orthophoto imagery (3.8 GB, 10 GeoTIFF tiles
+plus world files), on instruction. It is re-downloadable from the county, and no
+point cloud was touched: Denver's LAZ tiles remain in `data/real`.
+
+5.3 GB free. Extracting all five areas at once would not fit — an area expands
+to roughly twice its packed size — so extraction stays per-tile and on demand,
+which `hamburg.extract_tile` already does. That is the reason the remote-zip
+path exists rather than a convenience.
 
 ## 9. Gotchas worth not rediscovering
 
