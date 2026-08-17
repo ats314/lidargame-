@@ -182,3 +182,28 @@ def test_the_two_building_layers_are_not_independent():
     assert roofprints.independence == 2
     outlines = denver.LAYERS["building_outlines"]
     assert outlines.independence == 2
+
+
+def test_the_field_findings_travel_with_the_layer():
+    """Measured facts about a layer's fields belong on the layer.
+
+    These were in a standalone acquisition script that has since been folded
+    into the module. They are the kind of thing that costs an afternoon to
+    rediscover, and each one is counted over the LoDo AOI rather than guessed.
+    """
+    # Parcels are not buildings: 80% of rows are condominium records.
+    assert "80%" in denver.LAYERS["parcels"].notes
+    # The zoning height prior is missing exactly where buildings are tallest.
+    assert "62%" in denver.LAYERS["zoning"].notes
+    # The two road-class fields contradict each other; one of them is right.
+    streets = denver.LAYERS["street_centerlines"].notes
+    assert "VOLCLASS" in streets and "FUNCLASS" in streets
+    # A parking lot wrapped round a building is a polygon with a hole.
+    assert "Interior rings" in denver.LAYERS["parking_lots"].notes
+
+
+def test_layers_empty_over_one_aoi_are_still_catalogued():
+    """Absent from a downtown crop is not absent from the city."""
+    for layer_id in ("playgrounds", "athletic_fields"):
+        assert layer_id in denver.LAYERS
+        assert "Zero" in denver.LAYERS[layer_id].notes

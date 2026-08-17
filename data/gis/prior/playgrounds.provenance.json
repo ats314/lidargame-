@@ -1,0 +1,31 @@
+{
+  "id": "playgrounds",
+  "name": "Playgrounds",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PARK_PLAYGROUNDS_A/FeatureServer/91",
+  "role": "prior",
+  "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "polygon",
+  "geometry_returned": {},
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Zero features over the LoDo AOI, confirmed by query rather than assumed. Catalogued anyway because the AOI is the variable here and a park-adjacent block picks them up -- a layer absent from one downtown crop is not a layer that does not exist.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:54:24+00:00",
+  "fetch_seconds": 0.8,
+  "features": 0,
+  "fields_present": [],
+  "bytes": 108,
+  "sha256": "96178281b39873e89e27ed72a7c58e9a16cd7aef08aebe71842bbe492caef943",
+  "file": "prior/playgrounds.geojson",
+  "truncated": false
+}
