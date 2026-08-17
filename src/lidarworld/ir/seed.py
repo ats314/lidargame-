@@ -93,6 +93,61 @@ def _simplify(ring: np.ndarray, tolerance: float) -> np.ndarray:
     return np.vstack([left[:-1], right])
 
 
+
+def _roof_form(ring: np.ndarray, roofs) -> dict:
+    """What shape the roof measured, in the few numbers a generator needs.
+
+    A silhouette is most of what makes a skyline read as a place, and it is
+    cheap to carry: a slope, a direction and a plane count per building. What
+    it is *not* is a mesh -- the generator rebuilds the surface, this only says
+    what kind of surface to rebuild.
+
+    Classification is deliberately coarse, because that is all the evidence
+    supports at 3.6 pts/m2 from above:
+
+        flat     nothing measurably sloped
+        shed     one sloped plane
+        gable    two planes facing roughly opposite
+        hip      three or more
+    """
+    from ..data.gis import point_in_polygon
+
+    if not roofs or len(ring) < 4:
+        return {}
+    xy = np.array([[r[0], r[1]] for r in roofs])
+    lo, hi = ring[:, :2].min(axis=0), ring[:, :2].max(axis=0)
+    near = ((xy[:, 0] >= lo[0]) & (xy[:, 0] <= hi[0])
+            & (xy[:, 1] >= lo[1]) & (xy[:, 1] <= hi[1]))
+    if not near.any():
+        return {}
+    index = np.flatnonzero(near)
+    inside = index[point_in_polygon(xy[index], ring[:, :2])]
+    if not len(inside):
+        return {}
+
+    slopes = np.array([roofs[i][2] for i in inside])
+    areas = np.array([max(roofs[i][3], 1e-6) for i in inside])
+    normals = np.array([roofs[i][4] for i in inside])
+    sloped = slopes > 10.0
+    slope = float(np.average(slopes[sloped], weights=areas[sloped])) if sloped.any() else 0.0
+
+    if not sloped.any():
+        form = "flat"
+    elif sloped.sum() == 1:
+        form = "shed"
+    else:
+        # Two planes whose downhill directions oppose is a ridge; more is a hip.
+        aspects = np.arctan2(normals[sloped][:, 1], normals[sloped][:, 0])
+        spread = np.abs(np.angle(np.exp(1j * (aspects[:, None] - aspects[None, :]))))
+        form = "gable" if (spread > 2.4).any() and sloped.sum() <= 3 else "hip"
+
+    # Ridge runs across the slope, so it is the dominant aspect turned 90 deg.
+    dominant = normals[np.argmax(areas)] if not sloped.any() else \
+        normals[sloped][np.argmax(areas[sloped])]
+    ridge = float(np.degrees(np.arctan2(dominant[1], dominant[0])) + 90.0) % 180.0
+    return {"roof": form, "roof_slope_deg": round(slope, 1),
+            "roof_ridge_deg": round(ridge, 1), "roof_planes": int(len(inside))}
+
 def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
             bundle: str | Path | None = None) -> WorldSeed:
     """Reduce a compiled world to the description a generator can expand.
@@ -122,6 +177,28 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
                                    "255": "unobserved"},
                         "class": coarse.astype(int).tolist()}
 
+    # The compiler measures roof planes -- slope, aspect, how many of them --
+    # and the seed used to drop every one, writing "flat" for all 257 buildings
+    # in a LoDo block where 129 of 369 measured patches are pitched. That is
+    # not compression, it is loss: the generator cannot invent a silhouette the
+    # seed never recorded, so every building came back a box.
+    #
+    # Roof patches hang off the building node they belong to, and the programs
+    # are keyed by footprint index instead, so the join is spatial.
+    roofs_by_xy = []
+    for node in world.nodes.values():
+        if not node.role.startswith("surface.roof") or node.geometry is None:
+            continue
+        frame = node.geometry.frame
+        origin = frame.get("origin")
+        normal = frame.get("normal")
+        if origin is None or normal is None:
+            continue
+        roofs_by_xy.append((float(origin[0]), float(origin[1]),
+                            float(node.attrs.get("slope_deg", 0.0)),
+                            float(node.attrs.get("area", 0.0)),
+                            [float(v) for v in normal]))
+
     # Buildings come from the programs, because that is already the description
     # -- footprint and two heights. Nothing needs deriving from the mesh.
     for program in getattr(world, "programs", []):
@@ -131,14 +208,16 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
         ring = _simplify(ring, simplify)
         ground = float(program.params["ground_z"])
         eave = float(program.params["eave_z"])
-        seed.buildings.append({
+        entry = {
             "id": program.id,
             "footprint": np.round(ring, 2).tolist(),
             "ground_z": round(ground, 2),
             "height": round(eave - ground, 2),
             "roof": program.params.get("roof", "flat"),
             "residual": None if program.residual is None else round(program.residual, 3),
-        })
+        }
+        entry.update(_roof_form(ring, roofs_by_xy))
+        seed.buildings.append(entry)
 
     for node in world.nodes.values():
         if node.role != "volume.vegetation.high" or node.geometry is None:

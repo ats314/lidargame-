@@ -34,6 +34,7 @@ from ..reconstruct import lattice as lattice_stage
 from ..reconstruct import mesh as mesh_stage
 from ..reconstruct import terrain as terrain_stage
 from ..spatial.grid import Raster2D
+from ..roles.taxonomy import Ctx
 from ..types import Geometry, Node, World
 
 
@@ -147,6 +148,7 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
             width, height = patch.extent
             lat = lattice_stage.build_solid(patch, width, height, cell=tile,
                                             ground_z=base)
+            _fenestrate(lat, patch, building, index)
             sid = f"{bid}.wall.{patch.id:05d}"
             world.add(Node(
                 id=sid, role=patch.role, semantic="building", kind="surface",
@@ -155,16 +157,16 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
             node_slots.append(sid)
             quads += mesh_stage.add_lattice(builder, patch, lat, len(node_slots) - 1)
 
-        # A flat cap is a claim the seed actually makes: it stores a roof form,
-        # and `flat` is the honest default for a prism the returns only gave a
-        # height for.
-        roof = _roof_patch(ring, top, start_id=walls_made)
-        if roof is not None:
+        # Roof form, from what the scan measured rather than a flat default.
+        # This is the line that decides whether a skyline reads as a place or a
+        # row of boxes, and the seed now carries the slope and ridge bearing to
+        # drive it.
+        for roof in _roof_patches(ring, top, building, start_id=walls_made):
             walls_made += 1
             lat = lattice_stage.build_solid(roof, *roof.extent, cell=tile,
                                             ground_z=top)
-            rid = f"{bid}.roof"
-            world.add(Node(id=rid, role="surface.roof.flat", semantic="building",
+            rid = f"{bid}.roof.{roof.id:05d}"
+            world.add(Node(id=rid, role=roof.role, semantic="building",
                            kind="surface", parent=bid, confidence=0.5,
                            stage="generate", attrs={"epistemic": "generated"}))
             node_slots.append(rid)
@@ -193,22 +195,120 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
     return world
 
 
-def _roof_patch(ring: np.ndarray, z: float, *, start_id: int):
-    """A horizontal patch spanning the footprint, used as a flat roof cap."""
+def _roof_patches(ring: np.ndarray, z: float, building: dict, *, start_id: int):
+    """One patch for a flat roof, two for a ridged one.
+
+    A pitch is the cheapest silhouette variety there is: the seed stores a
+    slope and a ridge bearing, and honouring them turns an identical row of
+    boxes into a street with a roofline. `hip` is built as a gable here --
+    the seed records the plane count but not where the hips break, and
+    inventing that would be a claim the evidence does not support.
+    """
     from ..segment.planes import PlanarPatch
 
     xy = ring[:, :2]
     lo, hi = xy.min(axis=0), xy.max(axis=0)
-    if float(np.min(hi - lo)) < 0.5:
-        return None
-    centroid = np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z])
-    normal = np.array([0.0, 0.0, 1.0])
+    span = hi - lo
+    if float(np.min(span)) < 0.5:
+        return []
+    form = str(building.get("roof", "flat"))
+    slope = float(building.get("roof_slope_deg", 0.0))
+    if form == "flat" or slope < 5.0:
+        return [_plane(np.array([0.0, 0.0, 1.0]),
+                       np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z]),
+                       np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]),
+                       (float(span[0]), float(span[1])), start_id,
+                       "surface.roof.flat")]
+
+    ridge = np.radians(float(building.get("roof_ridge_deg", 0.0)))
+    along = np.array([np.cos(ridge), np.sin(ridge), 0.0])       # ridge line
+    across = np.array([-np.sin(ridge), np.cos(ridge), 0.0])     # falls away
+    corners = np.c_[xy - (lo + hi) / 2, np.zeros(len(xy))]
+    half_a = float(np.abs(corners @ along).max())
+    half_c = float(np.abs(corners @ across).max())
+    rise = np.tan(np.radians(min(slope, 60.0))) * half_c
+    centre = np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z])
+    tilt = np.radians(min(slope, 60.0))
+
+    patches = []
+    for sign in (+1.0, -1.0):
+        # Plane tilted about the ridge, its centroid halfway down the slope.
+        normal = np.array([0.0, 0.0, np.cos(tilt)]) - sign * across * np.sin(tilt)
+        normal /= np.linalg.norm(normal)
+        v = np.cross(normal, along); v /= np.linalg.norm(v)
+        centroid = centre + sign * across * (half_c / 2) + np.array([0, 0, rise / 2])
+        patches.append(_plane(normal, centroid, along, v,
+                              (2 * half_a, half_c / max(np.cos(tilt), 1e-3)),
+                              start_id + len(patches), "surface.roof.pitched"))
+    return patches
+
+
+def _plane(normal, centroid, u, v, extent, pid, role):
+    from ..segment.planes import PlanarPatch
+
     patch = PlanarPatch(
-        id=start_id, normal=normal, offset=float(-normal @ centroid),
-        centroid=centroid, u=np.array([1.0, 0.0, 0.0]),
-        v=np.array([0.0, 1.0, 0.0]),
-        extent=(float(hi[0] - lo[0]), float(hi[1] - lo[1])),
-        point_idx=np.empty(0, dtype=np.int64), role="surface.roof.flat",
+        id=pid, normal=np.asarray(normal, float),
+        offset=float(-np.asarray(normal, float) @ np.asarray(centroid, float)),
+        centroid=np.asarray(centroid, float), u=np.asarray(u, float),
+        v=np.asarray(v, float), extent=extent,
+        point_idx=np.empty(0, dtype=np.int64), role=role,
         confidence=0.5, support=0)
     patch.attrs["generated"] = True
     return patch
+
+
+#: Storey height in metres. Denver's downtown stock is mostly 3.5-4 m floor to
+#: floor; a generated facade only has to be *plausible* at this spacing, since
+#: airborne returns never saw a single window of it.
+STOREY_M = 3.8
+
+
+def _fenestrate(lattice, patch, building, index: int) -> None:
+    """Cut window and door openings into a generated facade.
+
+    Every wall here is Tier 7 -- procedural generation -- because the evidence
+    genuinely does not constrain it: airborne LiDAR never sees a facade, so
+    there is nothing to be faithful to and nothing to be wrong about. What the
+    seed *does* constrain is the envelope, and a window grid derived from the
+    building's own height and footprint stays inside that.
+
+    Deterministic on the building's identity, so the same seed regenerates the
+    same street rather than a different one each run. That is what makes the
+    world reproducible rather than merely random.
+    """
+    if not patch.role.startswith("surface.wall"):
+        return
+    occupancy = lattice.occupancy
+    context = lattice.context
+    nu, nv = occupancy.shape
+    cell = lattice.cell
+    height_m = nv * cell
+    if height_m < 4.0 or nu * cell < 3.0:
+        return                      # a garden wall, not a facade
+
+    rng = np.random.default_rng(abs(hash((building.get("id", index), patch.id))) % (2 ** 32))
+    storeys = max(1, int(round(height_m / STOREY_M)))
+    win_w = max(2, int(round(1.4 / cell)))     # ~1.4 m wide
+    win_h = max(2, int(round(1.6 / cell)))     # ~1.6 m tall
+    pier = max(2, int(round(1.6 / cell)))      # wall between windows
+    pitch = win_w + pier
+    if pitch >= nu:
+        return
+
+    margin = max(1, (nu % pitch) // 2)
+    for storey in range(storeys):
+        # Sill sits ~1 m above each floor, and the ground storey is taller,
+        # which is what makes a shopfront read differently from a flat above it.
+        floor_v = int(round(storey * STOREY_M / cell))
+        sill = floor_v + int(round((1.5 if storey else 0.8) / cell))
+        top = sill + (win_h if storey else int(round(2.4 / cell)))
+        if top >= nv - 1:
+            break
+        for u0 in range(margin, nu - win_w, pitch):
+            if storey and rng.random() < 0.06:
+                continue           # a blank bay; perfect regularity reads as CGI
+            occupancy[u0:u0 + win_w, sill:top] = 0
+            # Flag the reveal so a theme can put trim or a lintel on it.
+            context[max(0, u0 - 1):u0 + win_w + 1,
+                    max(0, sill - 1):min(nv, top + 1)] |= int(Ctx.NEAR_OPENING)
+            context[u0:u0 + win_w, sill:top] |= int(Ctx.OPENING_BOUNDARY)
