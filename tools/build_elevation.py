@@ -33,6 +33,23 @@ from lidarworld.reconstruct import elevation                  # noqa: E402
 from lidarworld.semantics import transfer                     # noqa: E402
 
 from facade_repair import cell_buildings                      # noqa: E402
+from textured_wall import bake, uv_for                        # noqa: E402
+
+#: Surface kind -> (procedural generator, real-world repeat in metres, how the
+#: building's own measured wall colour is tinted for it). Relief only reads if
+#: the faces that catch light differ from the ones that do not, and a cornice is
+#: the same render as the wall -- it is just in the light.
+SURFACES = {
+    "wall":    ("stone_block", 0.55, 1.00),
+    "plinth":  ("stone_block", 0.85, 0.72),
+    "string":  ("stone_block", 0.55, 1.05),
+    "cornice": ("stone_block", 0.55, 1.08),
+    "reveal":  ("stone_block", 0.55, 0.82),
+    "sill":    ("concrete",    0.50, 1.14),
+    "frame":   ("wood_plank",  0.40, 1.25),
+    "roof":    ("roof_tile",   0.60, 0.55),
+}
+GLAZED = {"glass": ("glass", 1.2, 1.10), "door": ("wood_plank", 0.6, 0.90)}
 
 
 def main() -> int:
@@ -44,9 +61,12 @@ def main() -> int:
     ap.add_argument("--px-per-m", type=float, default=48.0)
     ap.add_argument("--buildings", type=int, default=6,
                     help="how many of the block's buildings to build")
+    ap.add_argument("--tile-px-per-m", type=float, default=300.0)
     ap.add_argument("-o", "--out", default="build/helsinki/elevation.gltf")
     args = ap.parse_args()
 
+    out_dir = Path(args.out).parent
+    out_dir.mkdir(parents=True, exist_ok=True)
     subtile = Path(args.subtile)
     tile = "".join(c for c in subtile.name if c.isdigit())[:6]
     print(f"reading {subtile}", flush=True)
@@ -113,32 +133,24 @@ def main() -> int:
         built = elevation.build_detailed(max(rings, key=len), dna)
         if not len(built.quads):
             continue
-        # Relief only reads if the surfaces that catch light differ from the
-        # ones that do not. These are shading offsets on the building's own
-        # measured colour, not a palette: a cornice is the same render as the
-        # wall, it is just in the light.
+        # Tiles per building, so six buildings are not one material. The
+        # building's own de-lit measured colour tints every surface it has.
         w = np.asarray(dna.wall_rgb, dtype=float)
-        colour = {
-            "wall": tuple(w),
-            "glass": tuple(np.asarray(dna.window_rgb) * 0.85),
-            "door": tuple(np.asarray(dna.window_rgb) * 0.7),
-            "reveal": tuple(w * 0.80),
-            "sill": tuple(np.clip(w * 1.12, 0, 1)),
-            "frame": tuple(np.clip(w * 1.20, 0, 1)),
-            "plinth": tuple(w * 0.74),
-            "string": tuple(np.clip(w * 1.06, 0, 1)),
-            "cornice": tuple(np.clip(w * 1.10, 0, 1)),
-            "roof": tuple(w * 0.42),
-        }
-        # Per-building kinds, so six buildings are not one colour. The exporter
-        # groups untextured faces by kind, so the kind name has to carry the
-        # building or every wall in the block shares a material.
+        g = np.asarray(dna.window_rgb, dtype=float)
+        tiles = {}
+        for kind, (material, tile_m, tint) in {**SURFACES, **GLAZED}.items():
+            base = g if kind in GLAZED else w
+            path = out_dir / f"tile_{slot}_{kind}.png"
+            bake(material, tile_m, tuple(np.clip(base * tint, 0, 1)),
+                 px_per_m=args.tile_px_per_m, seed=int(slot) % 97, out=path)
+            tiles[kind] = (path, tile_m)
+
         for quad, kind in zip(built.quads, built.kinds):
+            path, tile_m = tiles.get(kind, tiles["wall"])
+            ring = np.asarray(quad, dtype=float)
             faces.append(gltf_textured.Face(
-                ring=quad, kind=f"{kind}@{slot}",
+                ring=ring, uv=uv_for(ring, tile_m), image=path.name, kind=kind,
                 surface_id=f"b{slot}_{kind}", building_id=str(slot)))
-        gltf_textured.FALLBACK.update(
-            {f"{k}@{slot}": (*v, 1.0) for k, v in colour.items()})
         records.append({"building": int(slot),
                         "gml_id": index.buildings[slot].gml_id,
                         **built.report})
@@ -162,7 +174,7 @@ def main() -> int:
         raise SystemExit("nothing was built")
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    gltf_textured.export(faces, out)
+    gltf_textured.export(faces, out, image_root=out_dir)
     summary = {
         "registration": registration.to_record(),
         "measured_on": {"facade_m": [round(best.width_m, 1), round(best.height_m, 1)],
