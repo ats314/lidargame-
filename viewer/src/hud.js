@@ -12,6 +12,12 @@ const el = (tag, className, text) => {
   return node;
 };
 
+/** The readable name out of a WKT blob: the PROJCS/GEOGCS label, nothing else. */
+function crsLabel(wkt) {
+  const m = /(?:COMPD_CS|PROJCS|GEOGCS)\s*\[\s*"([^"]+)"/.exec(wkt);
+  return m ? m[1] : wkt.slice(0, 60);
+}
+
 export class Hud {
   constructor(root, world, callbacks) {
     this.root = root;
@@ -28,7 +34,28 @@ export class Hud {
     sub.textContent = `${this.world.header.name} · ${this.world.header.summary.nodes} nodes · `
       + `${this.world.indices.length / 3 | 0} triangles`;
     header.append(sub);
-    if (this.world.header.crs) header.append(el('p', 'muted tiny', this.world.header.crs));
+    // The CRS used to be printed raw. A WKT string is 700 characters of
+    // AUTHORITY and SPHEROID that nobody reads, and it pushed everything
+    // worth knowing off the panel. Show the datum's name and keep the rest
+    // for the tooltip.
+    const crs = this.world.header.crs;
+    if (crs) {
+      const line = el('p', 'muted tiny', crsLabel(crs));
+      line.title = crs;
+      header.append(line);
+    }
+    // What you are actually looking at. A generated world and a measured one
+    // are the same triangles, so the panel has to say which this is -- it is
+    // the one thing about a reconstruction the geometry cannot tell you.
+    const origin = this.world.header.generated_from;
+    if (origin) {
+      const note = el('p', 'muted tiny',
+        `generated from a ${origin.seed} World Seed · `
+        + `${origin.buildings} buildings, ${origin.roads} roads, `
+        + `${origin.vegetation} trees · no point cloud was read`);
+      note.title = origin.note || '';
+      header.append(note);
+    }
 
     // --- themes ---------------------------------------------------------
     const themePanel = el('section', 'panel');

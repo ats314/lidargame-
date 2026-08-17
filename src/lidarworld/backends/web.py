@@ -59,7 +59,15 @@ def export(world: World, out_dir: str | Path, *, themes: list[str] | None = None
     if mesh is None:
         raise ValueError("world has no mesh arrays -- run the reconstruct stage first")
 
-    positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float32)
+    # Recentre before the float32 cast. The viewer's vertex buffer is float32
+    # and has to be, but projected world coordinates do not survive that: at a
+    # UTM northing float32 resolves half a metre, so every angled wall came
+    # through with a 0.5 m sawtooth. Vertices go out local to `geo_origin` and
+    # the viewer adds it back for anything that needs absolute position.
+    world_positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float64)
+    geo_origin = ((world_positions.min(axis=0) + world_positions.max(axis=0)) / 2.0
+                  if len(world_positions) else np.zeros(3))
+    positions = (world_positions - geo_origin).astype(np.float32)
     normals = np.asarray(world.arrays["mesh/normals"], dtype=np.float32)
     uv = np.asarray(world.arrays["mesh/uv"], dtype=np.float32)
     ctx = np.asarray(world.arrays["mesh/ctx"], dtype=np.uint32)
@@ -87,7 +95,7 @@ def export(world: World, out_dir: str | Path, *, themes: list[str] | None = None
     if include_points and world.points is not None and len(world.points):
         pc = world.points
         step = max(1, len(pc) // max_points)
-        xyz = pc.xyz[::step].astype(np.float32)
+        xyz = (pc.xyz[::step].astype(np.float64) - geo_origin).astype(np.float32)
         cls = pc.get("semantic")
         rl = pc.get("role")
         conf = pc.get("role_confidence")
@@ -109,7 +117,8 @@ def export(world: World, out_dir: str | Path, *, themes: list[str] | None = None
             frame = node_obj.geometry.frame
             instances.append({
                 "id": node_obj.id, "role": node_obj.role,
-                "position": frame.get("position", [0, 0, 0]),
+                "position": [float(v) - float(o) for v, o
+                             in zip(frame.get("position", [0, 0, 0]), geo_origin)],
                 "size": frame.get("size", [1, 1, 1]),
                 "yaw": frame.get("yaw", 0.0),
                 "confidence": round(node_obj.confidence, 3),
@@ -123,7 +132,13 @@ def export(world: World, out_dir: str | Path, *, themes: list[str] | None = None
         "crs": world.crs,
         "units": world.units,
         "origin": [float(v) for v in world.origin],
-        "bounds": [[float(v) for v in row] for row in world.bounds],
+        # Everything in this payload -- vertices, points, instance positions,
+        # bounds, the terrain grid origin -- is local to `geoOrigin`, so the
+        # viewer works in metres and float32 means what it says. Add geoOrigin
+        # back to recover the projected coordinate.
+        "geoOrigin": [float(v) for v in geo_origin],
+        "bounds": [[float(v) - float(o) for v, o in zip(row, geo_origin)]
+                   for row in world.bounds],
         "vertexLayout": [{"name": n, "components": c, "type": t} for n, c, t in VERTEX_LAYOUT],
         "vertexStride": VERTEX_STRIDE,
         "mesh": {
@@ -143,6 +158,9 @@ def export(world: World, out_dir: str | Path, *, themes: list[str] | None = None
         "sources": [s.to_json() for s in world.sources],
         "stages": [s.to_json() for s in world.stages],
         "summary": world.summary(),
+        # Promoted out of notes so the viewer can say, in its header, whether
+        # this world was measured or generated. Same triangles either way.
+        "generated_from": world.notes.get("generated_from"),
         "notes": world.notes,
     }
     (out_dir / "world.json").write_text(json.dumps(header, indent=1))

@@ -1,0 +1,653 @@
+"""Rectify a wall's slice of a texture atlas into a front-facing image.
+
+Hamburg maps facade appearance onto walls through a per-building atlas and a UV
+per polygon. That is exactly right for rendering and useless for everything
+else: the pixels for one wall are an arbitrary quadrilateral somewhere in a
+shared image, sheared by whatever the oblique camera's angle was.
+
+Anything that wants to *understand* a facade -- segment its windows, classify
+its material, judge a reconstruction against it -- needs the wall as a wall:
+front on, upright, at a known metres-per-pixel. So this resamples the atlas
+through the UV mapping onto the wall's own metric frame.
+
+    atlas + UV + wall frame  ->  rectified crop, scale known, orientation fixed
+
+Two things fall out that are worth as much as the image.
+
+The mapping is invertible. A window found at (x, y) in the crop is at a known
+offset in metres along the wall and up from its base, so a detection becomes a
+position on a named surface in 3D rather than a pixel.
+
+The effective resolution is measurable. The source is nominally 20 cm, but a
+wall seen at 45 degrees from a nadir-ish flight gets fewer pixels than that, and
+a wall the camera barely saw gets almost none. `resolution_px_per_m` says which,
+per wall, so a facade that cannot support analysis can be refused instead of
+guessed at.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+
+from ..reconstruct.tessellate import close_ring, triangulate, wall_frame
+
+#: Output sampling. 20 cm source is 5 px/m at best, so 32 px/m oversamples by
+#: about 6x -- deliberately. The crop is an analysis surface and a material
+#: input, not a compression target, and resampling artefacts at the native rate
+#: would be indistinguishable from facade detail.
+DEFAULT_PX_PER_M = 32.0
+
+#: Below this a wall's pixels cannot support window detection: at 2 px/m a
+#: 1.2 m window is two pixels across. Recorded rather than silently analysed.
+MIN_USABLE_PX_PER_M = 2.0
+
+
+@dataclass
+class Facade:
+    """One wall, rectified, with everything needed to map back to the world."""
+    surface_id: str | None
+    building_id: str | None
+    image: np.ndarray                       # (H, W, 3) uint8
+    px_per_m: float
+    width_m: float
+    height_m: float
+    origin_xyz: np.ndarray                  # world position of the crop's (0, 0)
+    u_axis: np.ndarray
+    v_axis: np.ndarray
+    normal: np.ndarray
+    resolution_px_per_m: float              # what the *source* actually supplied
+    covered: float                          # fraction of the crop with real pixels
+    #: Distance in front of the facade plane, metres, NaN where uncovered. The
+    #: rectifier computes this to resolve overlaps and used to discard it, which
+    #: threw away the best window detector available: a reveal is a step in
+    #: depth, measured, where a mask inferred from 10 px/m pixels is a guess.
+    depth: np.ndarray | None = None
+    meta: dict = field(default_factory=dict)
+
+    def to_world(self, x_px: float, y_px: float) -> np.ndarray:
+        """A pixel in the crop -> a point on the wall in world coordinates.
+
+        This is the whole reason the frame is carried alongside the image. The
+        crop's y runs down from the top, so it is flipped back against v.
+        """
+        u_m = x_px / self.px_per_m
+        v_m = self.height_m - y_px / self.px_per_m
+        return self.origin_xyz + u_m * self.u_axis + v_m * self.v_axis
+
+    def _quality(self) -> dict:
+        """Which part of the crop is really the wall, and how much that is.
+
+        Conservative on purpose. The band boundary is where horizontal rhythm
+        stops, and the transition storey is genuinely mixed -- part facade, part
+        whatever the camera saw past it -- so it falls on the unusable side. A
+        macro layer trusted too far down is worse than one trusted too little,
+        because the procedural layer can cover an honest gap and cannot undo a
+        roof photographed onto a wall.
+        """
+        top, bottom = usable_band(self.image, self.px_per_m)
+        return {
+            "usable_top": round(top, 3),
+            "usable_bottom": round(bottom, 3),
+            "usable_height_m": round((bottom - top) * self.height_m, 2),
+            "usable_fraction": round(bottom - top, 3),
+            "macro_trustworthy": bool(bottom - top > 0.25),
+        }
+
+    def to_dna(self) -> dict:
+        """The inspectable record the appearance pipeline is contracted on.
+
+        Deliberately holds no material decision. Everything here is measured or
+        geometric; `material_family`, masks and confidences are added by whatever
+        analyses the crop, and stay separable from what was observed.
+        """
+        return {
+            "surface_id": self.surface_id,
+            "building_id": self.building_id,
+            "width_m": round(self.width_m, 3),
+            "height_m": round(self.height_m, 3),
+            "crop_px": [int(self.image.shape[1]), int(self.image.shape[0])],
+            "px_per_m": self.px_per_m,
+            "source_px_per_m": round(self.resolution_px_per_m, 2),
+            "source_usable": bool(self.resolution_px_per_m >= MIN_USABLE_PX_PER_M),
+            "covered": round(self.covered, 4),
+            **self._quality(),
+            "origin_xyz": [round(float(v), 3) for v in self.origin_xyz],
+            "u_axis": [round(float(v), 6) for v in self.u_axis],
+            "v_axis": [round(float(v), 6) for v in self.v_axis],
+            "normal": [round(float(v), 6) for v in self.normal],
+            "source_uv_channel": 0,
+            **self.meta,
+        }
+
+
+def _barycentric(points: np.ndarray, a, b, c):
+    """Barycentric coordinates of `points` in triangle abc, all 2D."""
+    v0, v1, v2 = b - a, c - a, points - a
+    d00 = v0 @ v0
+    d01 = v0 @ v1
+    d11 = v1 @ v1
+    denom = d00 * d11 - d01 * d01
+    if abs(denom) < 1e-14:
+        return None
+    d20 = v2 @ v0
+    d21 = v2 @ v1
+    beta = (d11 * d20 - d01 * d21) / denom
+    gamma = (d00 * d21 - d01 * d20) / denom
+    return 1.0 - beta - gamma, beta, gamma
+
+
+def source_resolution(ring: np.ndarray, uv: np.ndarray,
+                      atlas_shape: tuple[int, int]) -> float:
+    """Pixels per metre the atlas actually devotes to this wall.
+
+    Ratio of the wall's area in texture pixels to its area in square metres,
+    square-rooted. This is the honest number: nominal GSD says what the camera
+    could resolve looking straight down, and a facade was never looked at
+    straight on.
+    """
+    # Close the ring, then take the UVs the same way rather than closing them
+    # independently: a UV's repeated last vertex is not always bit-identical to
+    # its first, so `close_ring` drops one and not the other, the lengths
+    # disagree and the whole measurement silently returns zero. Six of
+    # twenty-four Hamburg walls hit exactly that.
+    ring = np.asarray(ring, dtype=float)
+    uv = np.asarray(uv, dtype=float)
+    if len(ring) != len(uv) or len(ring) < 3:
+        return 0.0
+    flat_ring = close_ring(ring)
+    flat_uv = uv[:len(flat_ring)]
+    if len(flat_ring) < 3:
+        return 0.0
+    u_axis, v_axis, _ = wall_frame(flat_ring)
+    plane = np.column_stack([flat_ring @ u_axis, flat_ring @ v_axis])
+
+    def shoelace(points):
+        x, y = points[:, 0], points[:, 1]
+        return abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) / 2.0
+
+    metric_area = shoelace(plane)
+    height, width = atlas_shape[:2]
+    pixel_area = shoelace(flat_uv * np.array([width, height]))
+    if metric_area < 1e-9:
+        return 0.0
+    return float(np.sqrt(pixel_area / metric_area))
+
+
+def rectify(ring: np.ndarray, uv: np.ndarray, atlas: np.ndarray, *,
+            px_per_m: float = DEFAULT_PX_PER_M,
+            surface_id: str | None = None,
+            building_id: str | None = None,
+            max_px: int = 4096) -> Facade | None:
+    """Resample the atlas onto the wall's own frame. None if degenerate.
+
+    Nearest-neighbour on purpose. The source is already a resampled
+    photogrammetric product and the output oversamples it several times over, so
+    bilinear would only blur evidence that a later stage has to read. Anything
+    outside the polygon comes back as zero and is reported as uncovered rather
+    than filled, because an invented pixel is indistinguishable from a measured
+    one once it is in the image.
+    """
+    ring = close_ring(np.asarray(ring, dtype=float))
+    uv = close_ring(np.asarray(uv, dtype=float))
+    if len(ring) < 3 or len(uv) != len(ring):
+        return None
+
+    u_axis, v_axis, normal = wall_frame(ring)
+    su = ring @ u_axis
+    sv = ring @ v_axis
+    width_m = float(su.max() - su.min())
+    height_m = float(sv.max() - sv.min())
+    if width_m < 0.1 or height_m < 0.1:
+        return None
+
+    # A 60 m warehouse wall at 32 px/m is 1920 px, which is fine; a whole block
+    # face is not. Scale down rather than refuse, and record what was used.
+    scale = px_per_m
+    if max(width_m, height_m) * scale > max_px:
+        scale = max_px / max(width_m, height_m)
+    out_w = max(1, int(round(width_m * scale)))
+    out_h = max(1, int(round(height_m * scale)))
+
+    plane = np.column_stack([su - su.min(), sv - sv.min()])
+    tris = triangulate(ring)
+    if not len(tris):
+        return None
+
+    image = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    filled = np.zeros((out_h, out_w), dtype=bool)
+    atlas_h, atlas_w = atlas.shape[:2]
+
+    ys, xs = np.mgrid[0:out_h, 0:out_w]
+    # Pixel centres, with y flipped so row 0 is the top of the wall.
+    px_u = (xs + 0.5) / scale
+    px_v = height_m - (ys + 0.5) / scale
+    points = np.column_stack([px_u.ravel(), px_v.ravel()])
+
+    for tri in tris:
+        a, b, c = plane[tri[0]], plane[tri[1]], plane[tri[2]]
+        bary = _barycentric(points, a, b, c)
+        if bary is None:
+            continue
+        w0, w1, w2 = bary
+        inside = (w0 >= -1e-9) & (w1 >= -1e-9) & (w2 >= -1e-9)
+        if not inside.any():
+            continue
+        index = np.flatnonzero(inside)
+        # The UV map is affine within a triangle, so the same barycentrics that
+        # located the point on the wall locate it in the atlas.
+        tu = (w0[index] * uv[tri[0], 0] + w1[index] * uv[tri[1], 0]
+              + w2[index] * uv[tri[2], 0])
+        tv = (w0[index] * uv[tri[0], 1] + w1[index] * uv[tri[1], 1]
+              + w2[index] * uv[tri[2], 1])
+        # CityGML's v origin is the lower left; image row 0 is the top.
+        ax = np.clip((tu * atlas_w).astype(np.int64), 0, atlas_w - 1)
+        ay = np.clip(((1.0 - tv) * atlas_h).astype(np.int64), 0, atlas_h - 1)
+        rows, cols = np.divmod(index, out_w)
+        image[rows, cols] = atlas[ay, ax, :3]
+        filled[rows, cols] = True
+
+    # World position of the crop's lower-left corner: step from any known ring
+    # vertex to the frame's minimum along each axis.
+    corner = (ring[0] + (su.min() - su[0]) * u_axis
+              + (sv.min() - sv[0]) * v_axis)
+
+    return Facade(
+        surface_id=surface_id, building_id=building_id, image=image,
+        px_per_m=float(scale), width_m=width_m, height_m=height_m,
+        origin_xyz=corner, u_axis=u_axis, v_axis=v_axis, normal=normal,
+        resolution_px_per_m=source_resolution(ring, uv, atlas.shape),
+        covered=float(filled.mean()))
+
+
+#: A facade repeats horizontally and a roof seen obliquely does not. Bay spacing
+#: is *measured*, not assumed: on the Rathaus block a known-good Kontorhaus
+#: elevation autocorrelates at 1.50 m with harmonics at 2.16, 2.59 and 3.03 m.
+#: The first guess here was 2.5 to 9 m, which excluded the real bay entirely and
+#: reported a plainly good facade as 8% usable.
+BAY_MIN_M = 1.0
+BAY_MAX_M = 6.0
+
+#: One storey. The band has to span a whole window row: on a half-metre band the
+#: score swings between 0.80 and 0.07 depending on whether the band happens to
+#: land on glass or on brick between rows, which is noise, not evidence.
+STOREY_M = 3.5
+
+#: Below this normalised autocorrelation peak a band has no horizontal rhythm.
+#: Measured on the Rathaus block: storey bands over the good elevation score
+#: 0.24 to 0.47 and the roof-bleed band scores 0.11.
+RHYTHM_THRESHOLD = 0.18
+
+
+def rhythm_profile(image: np.ndarray, px_per_m: float, *,
+                   band_m: float = STOREY_M) -> np.ndarray:
+    """Per-storey strength of horizontal repetition, top band first.
+
+    An aerial oblique sees the top of a wall well and the bottom badly: the
+    building's own eaves, the roof in front and the street occlude the lower
+    storeys, so the lower part of a crop is frequently not the wall at all. On a
+    known-good Hamburg elevation that boundary is plainly visible and no metric
+    in the pipeline noticed it.
+
+    Detected rather than assumed, because the usable fraction varies per wall
+    with the flight geometry. The column signal is differenced before
+    correlating, so a facade in shadow scores like a facade in sun.
+    """
+    grey = image.astype(np.float32).mean(axis=2)
+    band_px = max(4, int(round(band_m * px_per_m)))
+    count = max(1, grey.shape[0] // band_px)
+    if grey.shape[1] < 8:
+        return np.zeros(count, dtype=np.float32)
+    lag_lo = max(2, int(BAY_MIN_M * px_per_m))
+    lag_hi = min(grey.shape[1] // 2, int(BAY_MAX_M * px_per_m))
+    if lag_hi <= lag_lo:
+        return np.zeros(count, dtype=np.float32)
+
+    scores = []
+    for start in range(0, grey.shape[0], band_px):
+        band = grey[start:start + band_px]
+        if len(band) < band_px // 2:
+            break
+        signal = np.diff(band.mean(axis=0))
+        signal -= signal.mean()
+        energy = float(signal @ signal)
+        if energy < 1e-6:
+            scores.append(0.0)
+            continue
+        best = max((float(signal[:-lag] @ signal[lag:]) / energy)
+                   for lag in range(lag_lo, lag_hi))
+        scores.append(max(0.0, best))
+    return np.asarray(scores or [0.0], dtype=np.float32)
+
+
+def usable_band(image: np.ndarray, px_per_m: float, *,
+                band_m: float = STOREY_M) -> tuple[float, float]:
+    """(top, bottom) of the trustworthy region as fractions of crop height.
+
+    The longest contiguous run of storeys with real horizontal rhythm. Where
+    that is the whole crop the wall was fully seen; where it stops part way
+    down, the lower storeys are occlusion bleed and the macro layer must not be
+    trusted there -- which is precisely the region a street-level camera spends
+    all its time looking at.
+    """
+    profile = rhythm_profile(image, px_per_m, band_m=band_m)
+    good = profile >= RHYTHM_THRESHOLD
+    best_len, best_start, run_start = 0, 0, None
+    for i, value in enumerate(np.append(good, False)):
+        if value and run_start is None:
+            run_start = i
+        elif not value and run_start is not None:
+            if i - run_start > best_len:
+                best_len, best_start = i - run_start, run_start
+            run_start = None
+    if best_len == 0:
+        return 0.0, 0.0
+    return (best_start / len(profile), (best_start + best_len) / len(profile))
+
+
+#: A Hamburg ground floor is not a repeat of the storeys above it -- shopfronts,
+#: entrances, larger openings, often different stone. Extending the upper pattern
+#: over it would be confidently wrong, so it is marked as its own zone and left
+#: for a storefront treatment rather than filled with brick.
+GROUND_FLOOR_M = 4.5
+
+
+def complete(facade: "Facade") -> tuple[np.ndarray, np.ndarray, dict]:
+    """Fill the part of a wall the camera never saw, and say exactly where.
+
+    An aerial oblique gives the top of a wall and not the bottom, and the bottom
+    is where a player stands. Something has to occupy it. The choice made here
+    is to extend the *lowest measured storey* downward rather than invent a
+    facade, because that preserves the one structural property that matters
+    most and is cheapest to get wrong: bay alignment. Windows that do not line
+    up with the storeys above read as broken immediately; slightly wrong brick
+    does not.
+
+    Three outputs, and the second is the important one:
+
+        completed     measured pixels above, extended pattern below
+        confidence    1 where the photograph is real, 0 where it is not
+        record        what was done, in metres
+
+    The confidence map is not decoration. It is what lets a shader keep the
+    macro layer where it is evidence and hand over to a procedural material
+    where it is not -- and it is what stops a synthesised lower storey from
+    being mistaken later for something Hamburg measured. Nothing here is
+    `observed`; the filled region is `generated` and says so.
+    """
+    height_px, width_px = facade.image.shape[:2]
+    top_f, bottom_f = usable_band(facade.image, facade.px_per_m)
+    completed = facade.image.copy()
+    confidence = np.zeros((height_px, width_px), dtype=np.float32)
+
+    usable_px = int(round(bottom_f * height_px))
+    top_px = int(round(top_f * height_px))
+    if usable_px <= top_px:
+        # Nothing measured is trustworthy: the whole wall is for the procedural
+        # layer. Returned honestly rather than repeating noise down the wall.
+        return completed, confidence, {
+            "strategy": "none", "measured_m": 0.0,
+            "synthesised_m": round(facade.height_m, 2),
+            "ground_floor_m": round(min(GROUND_FLOOR_M, facade.height_m), 2),
+            "epistemic": "generated"}
+
+    confidence[top_px:usable_px] = 1.0
+    ground_px = int(round(GROUND_FLOOR_M * facade.px_per_m))
+    fill_end = max(usable_px, height_px - ground_px)
+
+    # Source band: the lowest measured storey, which is the closest thing to
+    # what the storeys beneath it look like.
+    storey_px = max(8, int(round(STOREY_M * facade.px_per_m)))
+    src_lo = max(top_px, usable_px - storey_px)
+    source = facade.image[src_lo:usable_px]
+    if len(source) and fill_end > usable_px:
+        # Tiled without mirroring: a mirrored course puts sills above lintels,
+        # which is visibly wrong in a way a repeat is not.
+        reps = int(np.ceil((fill_end - usable_px) / len(source)))
+        block = np.tile(source, (reps, 1, 1))[: fill_end - usable_px]
+        completed[usable_px:fill_end] = block
+
+    if height_px > fill_end:
+        # Ground floor: flat mean colour of the measured band, so it reads as a
+        # deliberately blank zone awaiting a storefront rather than as brick
+        # that happens to be wrong.
+        completed[fill_end:] = facade.image[top_px:usable_px].reshape(-1, 3).mean(axis=0)
+
+    return completed, confidence, {
+        "strategy": "extend_lowest_measured_storey",
+        "measured_m": round((bottom_f - top_f) * facade.height_m, 2),
+        "synthesised_m": round((1.0 - bottom_f) * facade.height_m, 2),
+        "ground_floor_m": round(min(GROUND_FLOOR_M, facade.height_m), 2),
+        "bay_aligned": True,
+        "epistemic": "generated",
+    }
+
+
+#: How far in front of the nominal facade plane to accept geometry. A
+#: photogrammetric frontage is bumpy and carries balconies, sills and shopfront
+#: boxes; anything within this band belongs to the facade.
+FACADE_DEPTH_M = 6.0
+
+
+def facade_slabs(mesh, *, vertical_cos: float = 0.35, max_area: float = 5.0,
+                 bearings: int = 24, window_m: float = 40.0) -> list[dict]:
+    """Candidate facade planes, best first, by how much wall faces each way.
+
+    Grouping triangles by their own normals does not work on a reality mesh: a
+    real frontage is bumpy, so its normals scatter far wider than any sensible
+    bin, and a coplanar group came back as 129 scattered triangles covering 4%
+    of the crop it implied. What is stable is the *street* bearing. So this only
+    picks a direction and a position, and the rectifier then renders everything
+    standing in front of that plane, however its triangles happen to be angled.
+    """
+    positions = mesh.positions
+    centroids, areas, normals = [], [], []
+    for group in mesh.groups:
+        block = np.asarray(group.faces).reshape(-1, 3)
+        if not len(block):
+            continue
+        a, b, c = (positions[block[:, i]] for i in range(3))
+        cross = np.cross(b - a, c - a)
+        norm = np.linalg.norm(cross, axis=1)
+        area = norm / 2.0
+        with np.errstate(invalid="ignore", divide="ignore"):
+            unit = cross / np.maximum(norm[:, None], 1e-12)
+        keep = (np.abs(unit[:, 2]) < vertical_cos) & (area <= max_area) & (area > 1e-6)
+        if keep.any():
+            centroids.append(((a + b + c) / 3.0)[keep])
+            areas.append(area[keep])
+            normals.append(unit[keep])
+    if not centroids:
+        return []
+    centroid = np.vstack(centroids)
+    area = np.concatenate(areas)
+    unit = np.vstack(normals)
+
+    out = []
+    for slot in range(bearings):
+        angle = np.pi * slot / bearings
+        normal = np.array([np.cos(angle), np.sin(angle), 0.0])
+        # Only triangles actually facing this way, either side.
+        facing = np.abs(unit @ normal) > 0.55
+        if not facing.any():
+            continue
+        # Settle the facing direction BEFORE deriving the along-axis. Computing
+        # `along` from the unsigned normal and then flipping the normal on the
+        # way out leaves the rectifier deriving an along-axis pointing the other
+        # way, so its window never overlaps the geometry and every candidate is
+        # refused with no error.
+        sign = 1.0 if (unit[facing] @ normal).mean() > 0 else -1.0
+        normal = normal * sign
+        u_axis = np.cross(np.array([0.0, 0.0, 1.0]), normal)
+        u_axis /= np.linalg.norm(u_axis)
+        offset = centroid[facing] @ normal
+        along = centroid[facing] @ u_axis
+        weight = area[facing]
+        # Best 2 m offset bucket, then the best window along the wall.
+        buckets = np.floor(offset / 2.0).astype(np.int64)
+        best_bucket, best_weight = None, 0.0
+        for bucket in np.unique(buckets):
+            total = float(weight[buckets == bucket].sum())
+            if total > best_weight:
+                best_weight, best_bucket = total, int(bucket)
+        if best_bucket is None:
+            continue
+        sel = buckets == best_bucket
+        order = np.argsort(along[sel])
+        a_sorted = along[sel][order]
+        w_sorted = weight[sel][order]
+        best_run, best_span = 0.0, (a_sorted[0], a_sorted[0] + window_m)
+        for i in range(len(a_sorted)):
+            stop = np.searchsorted(a_sorted, a_sorted[i] + window_m, side="right")
+            total = float(w_sorted[i:stop].sum())
+            if total > best_run:
+                best_run = total
+                best_span = (a_sorted[i], a_sorted[i] + window_m)
+            if stop >= len(a_sorted):
+                break
+        out.append({"normal": normal,
+                    "offset": float(np.median(offset[sel])),
+                    "along": best_span, "area_m2": best_run})
+    out.sort(key=lambda d: -d["area_m2"])
+    return out
+
+
+def rectify_mesh(mesh, slab: dict, *, px_per_m: float = DEFAULT_PX_PER_M,
+                 depth_m: float = FACADE_DEPTH_M, max_px: int = 2600
+                 ) -> Facade | None:
+    """Orthographic front-on render of whatever stands in front of a facade plane.
+
+    This is a renderer, not a resampler, and that is the point. A reality mesh
+    has no surfaces to resample -- only triangles at every angle -- so the way
+    to get a facade image is to look at the wall square-on and draw everything
+    within a few metres of it, letting a depth test decide what is in front. A
+    balcony then appears as a balcony rather than being discarded for not lying
+    in the plane.
+    """
+    positions = mesh.positions
+    normal = np.asarray(slab["normal"], dtype=float)
+    normal /= np.linalg.norm(normal)
+    v_axis = np.array([0.0, 0.0, 1.0])
+    u_axis = np.cross(v_axis, normal)
+    if np.linalg.norm(u_axis) < 1e-6:
+        return None
+    u_axis /= np.linalg.norm(u_axis)
+
+    u_lo, u_hi = slab["along"]
+    offset = slab["offset"]
+    width_m = float(u_hi - u_lo)
+    if width_m < 2.0:
+        return None
+
+    # Height comes from the geometry actually inside the window, so the crop is
+    # the wall's own height rather than the whole tile's.
+    inside_v = []
+    triangles = []
+    for index, group in enumerate(mesh.groups):
+        block = np.asarray(group.faces).reshape(-1, 3)
+        if not len(block) or group.image is None:
+            continue
+        tri = positions[block]
+        centre = tri.mean(axis=1)
+        du = centre @ u_axis
+        dn = centre @ normal - offset
+        keep = (du >= u_lo - 1.0) & (du <= u_hi + 1.0) & (dn > -1.5) & (dn < depth_m)
+        if not keep.any():
+            continue
+        triangles.append((index, block[keep]))
+        inside_v.append((tri[keep] @ v_axis).ravel())
+    if not triangles:
+        return None
+    v_all = np.concatenate(inside_v)
+    v_lo = float(np.percentile(v_all, 0.5))
+    v_hi = float(np.percentile(v_all, 99.9))
+    height_m = v_hi - v_lo
+    if height_m < 2.0:
+        return None
+
+    scale = px_per_m
+    if max(width_m, height_m) * scale > max_px:
+        scale = max_px / max(width_m, height_m)
+    out_w = max(1, int(round(width_m * scale)))
+    out_h = max(1, int(round(height_m * scale)))
+
+    image = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    filled = np.zeros((out_h, out_w), dtype=bool)
+    depth = np.full((out_h, out_w), np.inf)
+    cache: dict = {}
+    total_px, total_m2 = 0.0, 0.0
+
+    for group_index, block in triangles:
+        source = mesh.groups[group_index].image
+        if source not in cache:
+            cache[source] = load_atlas(source)
+        atlas = cache[source]
+        atlas_h, atlas_w = atlas.shape[:2]
+        uvs = mesh.uvs[block]
+        for face, uv in zip(block, uvs):
+            tri = positions[face]
+            pu = tri @ u_axis - u_lo
+            pv = tri @ v_axis - v_lo
+            pn = tri @ normal - offset
+            cols = pu * scale
+            rows = (height_m - pv) * scale
+            x0 = max(int(np.floor(cols.min())), 0)
+            x1 = min(int(np.ceil(cols.max())) + 1, out_w)
+            y0 = max(int(np.floor(rows.min())), 0)
+            y1 = min(int(np.ceil(rows.max())) + 1, out_h)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            plane = np.column_stack([cols, rows])
+            ys, xs = np.mgrid[y0:y1, x0:x1]
+            samples = np.column_stack([xs.ravel() + 0.5, ys.ravel() + 0.5])
+            bary = _barycentric(samples, plane[0], plane[1], plane[2])
+            if bary is None:
+                continue
+            w0, w1, w2 = bary
+            inside = (w0 >= -1e-9) & (w1 >= -1e-9) & (w2 >= -1e-9)
+            if not inside.any():
+                continue
+            sel = np.flatnonzero(inside)
+            here = w0[sel] * pn[0] + w1[sel] * pn[1] + w2[sel] * pn[2]
+            rr, cc = np.divmod(sel, x1 - x0)
+            rr, cc = rr + y0, cc + x0
+            nearer = here < depth[rr, cc]
+            if not nearer.any():
+                continue
+            rr, cc, sel = rr[nearer], cc[nearer], sel[nearer]
+            tu = w0[sel] * uv[0, 0] + w1[sel] * uv[1, 0] + w2[sel] * uv[2, 0]
+            tv = w0[sel] * uv[0, 1] + w1[sel] * uv[1, 1] + w2[sel] * uv[2, 1]
+            ax = np.clip((tu * atlas_w).astype(np.int64), 0, atlas_w - 1)
+            ay = np.clip(((1.0 - tv) * atlas_h).astype(np.int64), 0, atlas_h - 1)
+            image[rr, cc] = atlas[ay, ax, :3]
+            filled[rr, cc] = True
+            depth[rr, cc] = here[nearer]
+
+            total_m2 += float(np.linalg.norm(
+                np.cross(tri[1] - tri[0], tri[2] - tri[0])) / 2.0)
+            scaled = uv * np.array([atlas_w, atlas_h])
+            total_px += abs(float(np.cross(scaled[1] - scaled[0],
+                                           scaled[2] - scaled[0]))) / 2.0
+
+    corner = u_lo * u_axis + v_lo * v_axis + offset * normal
+    surface = np.where(filled, depth, np.nan)
+    return Facade(
+        surface_id="mesh_facade", building_id=None, image=image,
+        px_per_m=float(scale), width_m=width_m, height_m=height_m,
+        origin_xyz=corner, u_axis=u_axis, v_axis=v_axis, normal=normal,
+        resolution_px_per_m=float(np.sqrt(total_px / total_m2)) if total_m2 else 0.0,
+        covered=float(filled.mean()), depth=surface)
+
+
+def load_atlas(path: str | Path) -> np.ndarray:
+    from PIL import Image
+    return np.asarray(Image.open(path).convert("RGB"))
+
+
+def save(facade: Facade, path: str | Path) -> Path:
+    from PIL import Image
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(facade.image).save(path)
+    return path

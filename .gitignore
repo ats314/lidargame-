@@ -4,6 +4,10 @@
 # Fetched GIS bundles: the payload is downloadable, the manifest is the record.
 /data/*/*.geojson
 !/data/*/manifest.json
+# CC0 material payload: 25 MB of JPEGs, re-fetchable from the library API by key.
+# The manifest is the record -- which material, its licence, its real-world size.
+/data/textures/*
+!/data/textures/manifest.json
 *.laz
 *.las
 *.part
@@ -42,3 +46,19 @@ probe.mjs
 /data/imagery/*.tif
 /data/imagery/*.tfw
 /data/imagery/download.log
+
+# Vienna Kappazunder test archives: CC BY 4.0 and directly downloadable from
+# wien.gv.at, so reproducible rather than vendored. URLs in data/vienna.py.
+/data/vienna/*.zip
+/data/vienna/extracted/
+
+# Hamburg LoD3.0-HH tiles: dl-de/by-2-0 and directly downloadable from
+# daten-hamburg.de, so reproducible rather than vendored. One inner-city tile is
+# 199 MB. URLs and per-tile extraction in data/hamburg.py.
+/data/hamburg/
+
+# Helsinki 3D+ mesh and semantic model: CC BY 4.0 and directly downloadable
+# from 3d.hel.ninja, so reproducible rather than vendored. The whole reality
+# mesh is 190 GB over 122 tiles; the nine central tiles are 13.3 GB and one
+# unpacks to thousands of OBJ/MTL/JPEG files. URLs in data/helsinki.py.
+/data/helsinki/
