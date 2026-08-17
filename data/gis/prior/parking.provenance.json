@@ -1,0 +1,52 @@
+{
+  "id": "parking",
+  "name": "Parking",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_PARKING_A/FeatureServer/138",
+  "role": "prior",
+  "epoch": "current",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "MultiPolygon": 2,
+    "Polygon": 247
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Parking areas as polygons. Directly useful: a parking polygon is a positive assertion that the ground there is open and paved, which is the one thing airborne returns cannot distinguish from a flat roof at grade or a demolished lot.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:04:07+00:00",
+  "fetch_seconds": 0.6,
+  "features": 249,
+  "fields_present": [
+    "BIZ_FILE_NUM",
+    "CITY_OWNED",
+    "DAILY_RATE",
+    "DDP_BLOCKNUM",
+    "ENTER_OFF_STREETS",
+    "FROM_DATE",
+    "LOT_OPERATOR",
+    "MONTHLY_RATE",
+    "NUMBER_OF_SPACES",
+    "OBJECTID",
+    "PARKING_ID",
+    "PARKING_STATUS",
+    "PARKING_TYPE",
+    "RECORD_DATE",
+    "RECORD_STATUS",
+    "SUBMARKET",
+    "Shape__Area",
+    "Shape__Length",
+    "TO_DATE"
+  ],
+  "bytes": 197321,
+  "sha256": "9550c7128b50fec8343559c448474b48e019e8a4cf0b6071e1afd3836f18717b",
+  "file": "prior/parking.geojson",
+  "truncated": false
+}

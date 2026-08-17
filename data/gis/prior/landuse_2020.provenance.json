@@ -1,0 +1,44 @@
+{
+  "id": "landuse_2020",
+  "name": "Existing Landuse 2020",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PLAN_EXISTINGLANDUSE2020_A/FeatureServer/319",
+  "role": "prior",
+  "epoch": "2020",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "MultiPolygon": 8,
+    "Polygon": 841
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Contemporaneous with the LiDAR, unlike parcels and zoning. The one land-use prior admissible in reconstruction mode.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:03:16+00:00",
+  "fetch_seconds": 1.4,
+  "features": 849,
+  "fields_present": [
+    "CPD_LANDUSE",
+    "DESC_NOTES",
+    "D_CLASS",
+    "D_CLASS_CN",
+    "GLOBALID",
+    "OBJECTID",
+    "OWNER_NAME",
+    "SCHEDNUM",
+    "Shape__Area",
+    "Shape__Length",
+    "TOTAL_UNITS"
+  ],
+  "bytes": 753399,
+  "sha256": "2aa347c0388e5f0c928ef6c844411e43d4e84ef7a09d8a5035255455cd37340c",
+  "file": "prior/landuse_2020.geojson",
+  "truncated": false
+}

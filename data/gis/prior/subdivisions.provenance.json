@@ -1,0 +1,50 @@
+{
+  "id": "subdivisions",
+  "name": "Subdivisions",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENG_SRVSUBDIVISIONS_A/FeatureServer/54",
+  "role": "prior",
+  "epoch": "current",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "MultiPolygon": 3,
+    "Polygon": 18
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Subdivision boundaries group buildings built together, to the same pattern. The natural unit for learning an architectural family rather than guessing per building.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:03:58+00:00",
+  "fetch_seconds": 0.7,
+  "features": 21,
+  "fields_present": [
+    "CLERK_NUMBER",
+    "CONSTYEAR",
+    "CRNO",
+    "CR_BOOK",
+    "CR_PAGE",
+    "DOCUMENT_NUMBER",
+    "GLOBALID",
+    "OBJECTID",
+    "ORD_NUMBER",
+    "ORD_TYPE",
+    "ORD_YEAR",
+    "RECEPTION_NUMBER",
+    "SUBID99",
+    "SUBNAME",
+    "SURVEY_RECORD",
+    "Shape__Area",
+    "Shape__Length"
+  ],
+  "bytes": 67916,
+  "sha256": "4fdf6545124089929202433f24a61d561d4abcdc31b476ab756b6a7dc8b42cee",
+  "file": "prior/subdivisions.geojson",
+  "truncated": false
+}

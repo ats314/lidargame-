@@ -106,11 +106,35 @@ def test_independence_is_recorded_for_every_layer():
 
 
 def test_validators_exclude_same_sensor_derivatives():
-    assert {l.id for l in denver.validators(3)} == {
-        "parcels", "zoning", "street_centerlines", "alleys", "curb_ramps_2022",
-        "sidewalks_current", "subdivisions"}
+    """The threshold is the assertion; the roster is not.
+
+    This used to spell out all seven level-3 ids, so adding a layer failed here
+    rather than anywhere meaningful. What matters is that `validators(n)` is
+    exactly the layers at or above n -- and that the imagery-derived layers,
+    which are the ones it would be tempting to score against, are the ones a
+    level-3 request drops.
+    """
+    for level in (2, 3, 4):
+        assert {l.id for l in denver.validators(level)} == {
+            l.id for l in denver.LAYERS.values() if l.independence >= level}
+
+    stereocompiled = {"building_outlines", "sidewalks_2020", "landuse_2020",
+                      "tree_canopy_2020"}
+    level3 = {l.id for l in denver.validators(3)}
+    assert not (level3 & stereocompiled), (
+        "level 3 is the external-record tier; imagery-derived layers are level 2")
+    assert stereocompiled <= {l.id for l in denver.validators(2)}
+
     assert len(denver.validators(2)) == len(denver.LAYERS)
     assert denver.validators(4) == []
+
+
+def test_every_layer_resolves_to_a_distinct_endpoint():
+    """A copy-pasted path or layer id silently fetches the wrong thing."""
+    urls = [l.url for l in denver.LAYERS.values()]
+    assert len(set(urls)) == len(urls), "two layers point at one endpoint"
+    for layer in denver.LAYERS.values():
+        assert layer.geometry in ("polygon", "polyline", "point"), layer.id
 
 
 def test_the_boulder_dead_end_is_written_down():

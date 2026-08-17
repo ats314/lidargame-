@@ -194,6 +194,46 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
               "same pattern. The natural unit for learning an architectural "
               "family rather than guessing per building.",
     ),
+    Layer(
+        id="survey_lots",
+        name="Survey Lots",
+        path="ODC_ENG_SRVLOTS_A", layer=46,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="The lot grid inside each subdivision. Finer than parcels, which "
+              "get merged and split by ownership -- lots keep the platted "
+              "rhythm that decides how wide a building on this street can be.",
+    ),
+    Layer(
+        id="parking",
+        name="Parking",
+        path="ODC_TRANS_PARKING_A", layer=138,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="Parking areas as polygons. Directly useful: a parking polygon is "
+              "a positive assertion that the ground there is open and paved, "
+              "which is the one thing airborne returns cannot distinguish from "
+              "a flat roof at grade or a demolished lot.",
+    ),
+    Layer(
+        id="parking_lots",
+        name="Parking Lots",
+        path="ODC_TRANS_PARKINGLOTS_A", layer=139,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="Surface lots specifically. LoDo is full of them and they are the "
+              "commonest false positive for 'flat low building' -- having them "
+              "enumerated stops the compiler inventing a one-storey box on "
+              "every asphalt rectangle.",
+    ),
+    Layer(
+        id="parkland",
+        name="DPR Parkland 2026",
+        path="DPR_Parkland_2026", layer=0,
+        role="prior", epoch="2026", geometry="polygon", independence=3,
+        notes="Parks and Recreation's parkland boundaries. The vegetation prior: "
+              "inside a park, tall returns are trees; outside one, on a footprint, "
+              "they are a building. Surveyed 2026, so `manifest()` withholds it "
+              "from a 2020 reconstruction on epoch grounds -- it is a "
+              "generation-mode input, and parkland boundaries barely move.",
+    ),
 ]}
 
 #: The LiDAR epochs flown over Denver. All airborne -- no ground-level or

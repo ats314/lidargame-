@@ -1,0 +1,38 @@
+{
+  "id": "curb_ramps_2022",
+  "name": "Curb Ramps 2022",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_CURBRAMPS_P/FeatureServer/228",
+  "role": "later_epoch",
+  "epoch": "2022",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "point",
+  "geometry_returned": {
+    "Point": 787
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "Kerb ramp positions imply kerb lines and crossing geometry.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:04:15+00:00",
+  "fetch_seconds": 1.0,
+  "features": 787,
+  "fields_present": [
+    "COMMENTS",
+    "CREATEDATE",
+    "CREATEUSER",
+    "OBJECTID",
+    "UNIQUE_ID",
+    "UPDATE_STATUS"
+  ],
+  "bytes": 202998,
+  "sha256": "869afb284fee60d79f95cdc2cd859b0cef80078b9959b41d3d69513836e9a9bf",
+  "file": "truth/curb_ramps_2022.geojson",
+  "truncated": false
+}

@@ -1,0 +1,42 @@
+{
+  "id": "survey_lots",
+  "name": "Survey Lots",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENG_SRVLOTS_A/FeatureServer/46",
+  "role": "prior",
+  "epoch": "current",
+  "independence": 3,
+  "independence_note": "external record",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "MultiPolygon": 2,
+    "Polygon": 4624
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "The lot grid inside each subdivision. Finer than parcels, which get merged and split by ownership -- lots keep the platted rhythm that decides how wide a building on this street can be.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:04:06+00:00",
+  "fetch_seconds": 8.3,
+  "features": 4626,
+  "fields_present": [
+    "BLOCKNUM",
+    "GLOBALID",
+    "LOTNUM",
+    "OBJECTID",
+    "SOURCE",
+    "SUBDIVISION",
+    "SYSTEM_START_DATE",
+    "Shape__Area",
+    "Shape__Length"
+  ],
+  "bytes": 2381633,
+  "sha256": "459629940ee672e1fb50123aa698668527a0cb02fe1f935524e66ac59273c868",
+  "file": "prior/survey_lots.geojson",
+  "truncated": false
+}

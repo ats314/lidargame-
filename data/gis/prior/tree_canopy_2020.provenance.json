@@ -1,0 +1,40 @@
+{
+  "id": "tree_canopy_2020",
+  "name": "Tree Canopy 2020",
+  "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENV_TREECANOPY2020_A/FeatureServer/348",
+  "role": "prior",
+  "epoch": "2020",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "MultiPolygon": 7
+  },
+  "license": "City and County of Denver open data: liability disclaimer, no explicit copyright grant, marked NOT FOR ENGINEERING PURPOSES",
+  "attribution": "City and County of Denver, Department of Technology Services",
+  "notes": "NOT canopy polygons. Queried live: 7 features over the LoDo AOI, carrying CANOPY_ACRES / PCT_CANOPY / NBHD_NAME -- neighbourhood aggregate statistics, one row per neighbourhood. Useful as a density prior and useless as per-tree truth, so it cannot check this compiler's tree segmentation however much that is wanted. Denver publishes no per-tree canopy geometry.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:03:57+00:00",
+  "fetch_seconds": 39.5,
+  "features": 7,
+  "fields_present": [
+    "CANOPY_ACRES",
+    "GlobalID",
+    "NBHD_ACRES",
+    "NBHD_NAME",
+    "OBJECTID",
+    "PCT_CANOPY",
+    "Shape__Area",
+    "Shape__Length"
+  ],
+  "bytes": 30898500,
+  "sha256": "97b4e344b089e5541606fbffe612b9214cbe91f38ed363110222df1dceb400ad",
+  "file": "prior/tree_canopy_2020.geojson",
+  "truncated": false
+}
