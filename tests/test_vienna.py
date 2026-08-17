@@ -50,3 +50,15 @@ def test_the_facade_capability_is_recorded_with_its_reason():
     assert vienna.KAPPAZUNDER["license"] == "CC BY 4.0"
     assert any("orientation" in item for item in vienna.KAPPAZUNDER["ships"])
     assert vienna.OBLIQUE["epochs"] == ("2020", "2023")
+
+
+def test_the_ordering_route_is_recorded_because_it_blocks_acquisition():
+    """Kappazunder is requested, not downloaded. That is a human action in
+    someone's name, so it has to be visible rather than discovered when an
+    automated fetch quietly fails."""
+    order = vienna.KAPPAZUNDER_ORDER
+    assert "not a direct download" in order["route"]
+    assert order["product_page"].startswith("https://www.wien.gv.at/")
+    # The capability the whole move depends on, stated where it can be checked.
+    assert "orientation" in order["metadata"]
+    assert "first echoes" in order["point_attributes"]

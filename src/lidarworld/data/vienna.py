@@ -177,6 +177,28 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
 #:
 #: A predefined test area is published under CC BY 4.0, which is the right
 #: place to start rather than requesting the city.
+#: Confirmed from the product page on 2026-08-17, not inferred.
+#:
+#: IMPORTANT, and the reason this cannot simply be fetched: the 2020 data is
+#: obtained by submitting a request form to the City, not by direct download.
+#: That is an outward-facing action in someone's name and is the owner's to
+#: take, so acquisition stops here until it is. The published test area is the
+#: exception and is the right thing to start on.
+KAPPAZUNDER_ORDER = {
+    "product_page": ("https://www.wien.gv.at/stadtplanung/"
+                     "mobile-mapping-befahrungsdaten-produktinformation"),
+    "interface_spec_en": "https://www.wien.gv.at/pdf/ma41/datainterface-kappazunder-en.pdf",
+    "route": "request form on wien.gv.at formularserver; not a direct download",
+    "acquired": "driven from May 2020",
+    "coverage": "the whole Vienna street network, plus the Donauinsel, "
+                "selected parks and the urban motorways",
+    "panoramas": "360 degree, delivered as cubemap",
+    "point_clouds": "LAZ; one trajectory may span several files",
+    "point_attributes": "intensity and RGB, first echoes only",
+    "metadata": "ASCII, carrying inner and outer camera orientation and "
+                "timestamps per image and per cloud",
+}
+
 KAPPAZUNDER = {
     "name": "Kappazunder 2020 mobile mapping",
     "coverage_km": 4600,
