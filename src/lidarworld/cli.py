@@ -89,6 +89,7 @@ def _cmd_compile(args) -> int:
         name=args.name or Path(args.inputs[0]).stem,
         terrain_cell=args.terrain_cell,
         tile=args.tile,
+        adaptive_roof_tile=not args.uniform_roof_tile,
         plane_voxel=args.plane_voxel,
         decimate=args.decimate,
         bbox=bbox,
@@ -427,6 +428,11 @@ def build_parser() -> argparse.ArgumentParser:
                         "paris_lille_3d, semantickitti, nuscenes, asprs). Ranges collide "
                         "between datasets, so say which one rather than letting it guess.")
     c.add_argument("--tile", type=float, default=0.25, help="facade tile size in metres")
+    c.add_argument("--uniform-roof-tile", action="store_true",
+                   help="give roofs the facade tile size instead of sizing "
+                        "their lattice from their own sampling density. "
+                        "Airborne roofs come out speckled; a dense terrestrial "
+                        "scan does not need the adaptation.")
     c.add_argument("--terrain-cell", type=float, default=1.0)
     c.add_argument("--plane-voxel", type=float, default=0.6)
     c.add_argument("--decimate", type=int, default=1)

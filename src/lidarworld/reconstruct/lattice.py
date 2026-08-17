@@ -16,6 +16,7 @@ back. Rather than patching that hole, we keep it -- it is real geometry.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -148,6 +149,70 @@ def distance_to_false(mask: np.ndarray, limit: int = 15) -> np.ndarray:
         dist[current] = d
         current = _erode(current, 1)
     return dist
+
+
+def sampling_cell(patch, xyz: np.ndarray, *, floor: float, ceiling: float = 1.0,
+                  target: float = 0.6, probe: float = 1.0) -> float:
+    """A lattice cell this patch's returns can actually fill.
+
+    0.25 m is a facade number. A facade is scanned nearly edge-on but from
+    thousands of pulses along a street, and it wants fine cells because the
+    context mask is what puts quoins on corners and trim round windows. A roof
+    seen from an aircraft is the opposite: 3.6 pts/m2 over the LoDo block, so a
+    0.25 m cell holds 0.22 returns and **81% of roof cells are empty**. Morphology
+    recovers some, but a hole that reaches the patch border is never filled, and
+    at that emptiness the holes percolate to the border nearly everywhere. That
+    is the speckle -- the roofs were 62% solid.
+
+    Treating returns as Poisson over the patch, a cell of size c holds d*c^2 of
+    them and is occupied with probability 1 - exp(-d*c^2). Invert it for the
+    occupancy we want:
+
+        c = sqrt(-ln(1 - target) / d)
+
+    The model earns its place by predicting the measurement: 20 / 59 / 90 per
+    cent occupancy at 0.25 / 0.5 / 0.8 m against 19 / 57 / 94 observed.
+
+    `target` is 0.6 rather than something near 1 because closing and enclosed-
+    hole filling run afterwards and finish the job; asking the raw returns for a
+    solid surface would blur the roof outline for no gain.
+
+    Density is measured over the area the patch *occupies*, counted on a coarse
+    probe grid, not over its bounding box. A roof is rarely a rectangle, and a
+    box overestimates the area, underestimates the density, and blurs the
+    lattice -- which is the failure this function exists to avoid.
+
+    But counting only occupied probe cells biases the other way: the probe grid
+    has gaps of its own, so dividing by occupied area alone overstates density,
+    badly when the returns are thin. At 1 pt/m2 a 1 m probe is 63% occupied and
+    the naive estimate reads 1.58. The same Poisson relation fixes it -- the
+    occupied cells are q = 1 - exp(-d * probe^2) of the true area -- which makes
+    the estimate the fixed point of
+
+        d = d_naive * (1 - exp(-d * probe^2))
+
+    a few iterations from d_naive. It converges quickly, changes nothing where
+    the probe is nearly full (3.6 pts/m2 moves 3.69 -> 3.59) and pulls the
+    sparse case back where it belongs (1.58 -> 1.01).
+    """
+    uv = patch.project(xyz)
+    if len(uv) < 4:
+        return float(ceiling)
+    occupied = len(np.unique(np.floor(uv / probe).astype(np.int64), axis=0))
+    naive = len(uv) / max(occupied * probe * probe, 1e-9)
+    if naive <= 0:
+        return float(ceiling)
+    density = naive
+    for _ in range(32):
+        updated = naive * -math.expm1(-density * probe * probe)
+        if abs(updated - density) < 1e-4 * max(density, 1.0):
+            density = updated
+            break
+        density = updated
+    if density <= 0:
+        return float(ceiling)
+    cell = math.sqrt(-math.log(1.0 - target) / density)
+    return float(np.clip(cell, floor, ceiling))
 
 
 def build(patch, xyz: np.ndarray, *, cell: float = 0.25, close_radius: int = 1,
