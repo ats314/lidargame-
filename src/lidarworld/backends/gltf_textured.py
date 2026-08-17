@@ -33,7 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..reconstruct.tessellate import close_ring, triangulate
+from ..reconstruct.tessellate import close_ring, newell, triangulate
 
 #: 20 cm imagery is coarse enough that a bilinear magnify is the honest choice:
 #: nearest turns a facade into visible blocks at walking distance, which reads as
@@ -50,11 +50,54 @@ class Face:
     `image` is a path to a source image, not a material name. `uv` is per
     exterior-ring vertex in the source's own convention; the v-flip to glTF
     happens here.
+
+    `surface_id` and `building_id` are carried through because the appearance
+    pipeline needs them: a mask detected in UV0 has to be mappable back to a
+    named 3D surface, and a material instance has to be attributable to a
+    building. Dropping them at the conversion boundary makes that impossible
+    afterwards.
     """
     ring: np.ndarray                 # (N, 3) world coordinates
     uv: np.ndarray | None = None     # (N, 2)
     image: str | None = None
     kind: str = ""                   # wall | roof | ground, for the fallback colour
+    surface_id: str | None = None
+    building_id: str | None = None
+
+
+#: Above this |normal.z| a surface is treated as a roof or floor rather than a
+#: wall, which decides whether the micro frame is anchored to world up.
+HORIZONTAL_NZ = 0.7
+
+
+def wall_frame(ring: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A surface's own (u, v, normal) axes, in metres, oriented for masonry.
+
+    Brick courses, stone courses and siding are directional: they run along the
+    wall and stack toward the sky. A triplanar or arbitrary projection rotates
+    them at corners, which reads instantly as fake. So a wall's v axis is world
+    up and its u axis runs horizontally along the face, and the material's
+    orientation follows the building rather than the world axes.
+
+    Horizontal surfaces have no meaningful "up" in plane, so they fall back to
+    a stable world-referenced frame -- arbitrary, but consistent between
+    adjacent roof planes, which is what stops a tiling seam at every ridge.
+    """
+    normal = newell(ring)
+    length = float(np.linalg.norm(normal))
+    normal = normal / length if length > 1e-12 else np.array([0.0, 0.0, 1.0])
+    up = np.array([0.0, 0.0, 1.0])
+    if abs(normal[2]) < HORIZONTAL_NZ:
+        u = np.cross(up, normal)
+        u /= np.linalg.norm(u)
+        v = up
+    else:
+        u = np.cross(normal, np.array([0.0, 1.0, 0.0]))
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(normal, np.array([1.0, 0.0, 0.0]))
+        u /= np.linalg.norm(u)
+        v = np.cross(normal, u)
+    return u, v, normal
 
 
 #: Where a surface has no texture binding, the fallback names the *class*, not a
@@ -128,9 +171,11 @@ def export(faces: list[Face], out_path: str | Path, *,
         accessors.append(accessor)
         return len(accessors) - 1
 
+    surfaces: list[dict] = []
     for image_name, members in groups.items():
         positions: list[np.ndarray] = []
         uvs: list[np.ndarray] = []
+        metric: list[np.ndarray] = []
         indices: list[np.ndarray] = []
         base = 0
         for face in members:
@@ -140,6 +185,23 @@ def export(faces: list[Face], out_path: str | Path, *,
                 skipped["degenerate"] += 1
                 continue
             local = ring - origin
+
+            # UV1: wall-local coordinates in *metres*, not normalised.
+            #
+            # Normalising by wall width and height was the obvious thing and it
+            # is wrong: it makes one brick course span a garden shed and a
+            # warehouse identically. The micro material has a real repeat -- a
+            # brick is 240 mm -- so the shader needs a metric coordinate and
+            # divides by its own tile size. `wall_frame` also keeps courses
+            # running along the wall and stacking toward the sky, so masonry
+            # does not rotate at a corner.
+            u_axis, v_axis, _ = wall_frame(ring)
+            su = local @ u_axis
+            sv = local @ v_axis
+            # glTF's v runs down the image; negating keeps world-up pointing up
+            # the texture, so a directional material is not upside down.
+            metric.append(np.column_stack([su, -sv]).astype(np.float32))
+
             if y_up:
                 # Z-up right-handed -> glTF's Y-up right-handed.
                 local = np.column_stack([local[:, 0], local[:, 2], -local[:, 1]])
@@ -150,9 +212,21 @@ def export(faces: list[Face], out_path: str | Path, *,
                     skipped["no_uv_match"] += 1
                     uv = np.zeros((len(ring), 2))
                 # CityGML puts (0,0) at the lower left; glTF at the upper left.
+                # This is the identity channel and is passed through untouched
+                # apart from that flip -- it is what makes the building itself.
                 uvs.append(np.column_stack([uv[:, 0], 1.0 - uv[:, 1]]).astype(np.float32))
             indices.append(tris + base)
             base += len(ring)
+
+            surfaces.append({
+                "surface_id": face.surface_id, "building_id": face.building_id,
+                "kind": face.kind, "image": image_name,
+                "width_m": round(float(su.max() - su.min()), 3),
+                "height_m": round(float(sv.max() - sv.min()), 3),
+                "u_axis": [round(float(v), 6) for v in u_axis],
+                "v_axis": [round(float(v), 6) for v in v_axis],
+                "origin_xyz": [round(float(v), 3) for v in ring[0]],
+            })
 
         if not positions:
             continue
@@ -161,6 +235,8 @@ def export(faces: list[Face], out_path: str | Path, *,
         attributes = {"POSITION": add_accessor(position, "VEC3", 5126)}
         if uvs:
             attributes["TEXCOORD_0"] = add_accessor(np.vstack(uvs), "VEC2", 5126)
+        if metric:
+            attributes["TEXCOORD_1"] = add_accessor(np.vstack(metric), "VEC2", 5126)
         primitive = {"attributes": attributes,
                      "indices": add_accessor(index, "SCALAR", 5125),
                      "material": len(materials)}
@@ -219,12 +295,27 @@ def export(faces: list[Face], out_path: str | Path, *,
         handle.write(struct.pack("<II", len(buffer), 0x004E4942))
         handle.write(bytes(buffer))
 
+    # The surface index is the piece that makes appearance work possible later.
+    # A mask detected in UV0 is a point in image space; turning it back into a
+    # place on a named wall needs that wall's frame and metric extent, and none
+    # of that survives inside a glTF. Written beside the model rather than into
+    # it, because it is metadata for a pipeline, not something an engine reads.
+    index_path = out_path.with_suffix(".surfaces.json")
+    index_path.write_text(json.dumps({
+        "model": out_path.name,
+        "origin": origin.tolist(),
+        "uv0": "source appearance atlas, passed through unchanged",
+        "uv1": "wall-local metres; divide by the material repeat in metres",
+        "surfaces": surfaces,
+    }, separators=(",", ":")))
+
     return {"path": str(out_path), "bytes": out_path.stat().st_size,
             "primitives": len(primitives), "materials": len(materials),
             "textures": len(textures),
             "triangles": sum(a["count"] for a in accessors
                              if a["type"] == "SCALAR") // 3,
-            "origin": origin.tolist(), "skipped": skipped}
+            "origin": origin.tolist(), "skipped": skipped,
+            "surfaces": len(surfaces), "surface_index": str(index_path)}
 
 
 def data_uri(path: str | Path) -> str:

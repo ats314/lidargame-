@@ -26,6 +26,19 @@ from ..types import World
 Z_UP_TO_Y_UP = [1, 0, 0, 0,  0, 0, -1, 0,  0, 1, 0, 0,  0, 0, 0, 1]
 
 
+def _placed(rotation: list, origin) -> list:
+    """`rotation` with a translation that puts recentred vertices back.
+
+    glTF matrices are column-major, so the translation occupies elements 12-14.
+    The offset is the origin carried through the same axis swap the vertices
+    went through, otherwise the world lands rotated about the wrong point.
+    """
+    matrix = list(rotation)
+    basis = np.asarray(rotation, dtype=float).reshape(4, 4).T[:3, :3]
+    matrix[12], matrix[13], matrix[14] = (basis @ np.asarray(origin, dtype=float)).tolist()
+    return [float(v) for v in matrix]
+
+
 def resolve_vertex_materials(world: World, pack: ThemePack) -> tuple[np.ndarray, list]:
     """Material index per vertex, resolving each distinct (role, ctx) pair once."""
     ctx = np.asarray(world.arrays["mesh/ctx"], dtype=np.uint32)
@@ -51,7 +64,21 @@ def export(world: World, pack: ThemePack, out_dir: str | Path, *,
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float32)
+    # Recentre before the cast, or projected coordinates lose the world.
+    #
+    # A UTM northing is about 5.93e6. float32 has a 24-bit mantissa, so it
+    # resolves 0.5 m there -- and 0.0625 m at a 5.7e5 easting. Exporting raw
+    # therefore snapped every vertex to a half-metre grid in north only, giving
+    # a stair-stepped, anisotropically warped mesh that no triangle count or
+    # residual could show. Measured on a Hamburg block: the smallest distinct
+    # northing step in the exported buffer was exactly 0.5 m.
+    #
+    # Vertices go out local to `geo_origin` and the node matrix carries the
+    # offset, so absolute placement survives and float32 gets its full range.
+    raw = np.asarray(world.arrays["mesh/positions"], dtype=np.float64)
+    geo_origin = ((raw.min(axis=0) + raw.max(axis=0)) / 2.0
+                  if len(raw) else np.zeros(3))
+    positions = (raw - geo_origin).astype(np.float32)
     normals = np.asarray(world.arrays["mesh/normals"], dtype=np.float32)
     uv = np.asarray(world.arrays["mesh/uv"], dtype=np.float32)
     indices = np.asarray(world.arrays["mesh/indices"], dtype=np.uint32).reshape(-1, 3)
@@ -145,7 +172,10 @@ def export(world: World, pack: ThemePack, out_dir: str | Path, *,
                   "copyright": "; ".join(f"{s.id}: {s.license}" for s in world.sources)},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
-        "nodes": [{"name": world.name, "mesh": 0, "matrix": Z_UP_TO_Y_UP}],
+        "nodes": [{"name": world.name, "mesh": 0,
+                   "matrix": _placed(Z_UP_TO_Y_UP, geo_origin),
+                   "extras": {"geoOrigin": [float(v) for v in geo_origin],
+                              "crs": world.crs}}],
         "meshes": [{"name": world.name, "primitives": primitives}],
         "buffers": [{"uri": bin_name, "byteLength": len(buffer)}],
         "bufferViews": buffer_views,

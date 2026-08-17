@@ -67,7 +67,12 @@ def main() -> int:
                     ring=polygon.exterior,
                     uv=found.uv[0] if found and found.uv else None,
                     image=found.image if found and found.uv else None,
-                    kind=surface.kind))
+                    kind=surface.kind,
+                    # Carried, not dropped: the appearance pipeline has to be
+                    # able to name the wall a detected mask belongs to, and
+                    # these ids are essentially the ALKIS cadastre's.
+                    surface_id=polygon.gml_id or surface.gml_id,
+                    building_id=building.gml_id))
     print(f"{len(faces)} faces, {sum(1 for f in faces if f.image)} textured",
           flush=True)
 

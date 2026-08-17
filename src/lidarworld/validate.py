@@ -86,7 +86,15 @@ class EmbreeScene:
     def __init__(self, world: World, **_ignored):
         import open3d as o3d
 
-        positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float32)
+        # Embree is float32 throughout, so the mesh has to be recentred before
+        # it goes in: at a UTM northing float32 resolves half a metre, and a
+        # scoreboard built on geometry snapped to a 0.5 m grid measures the
+        # cast, not the reconstruction. Ray origins are shifted by the same
+        # offset in `march`.
+        world_positions = np.asarray(world.arrays["mesh/positions"], dtype=np.float64)
+        self.geo_origin = ((world_positions.min(axis=0) + world_positions.max(axis=0)) / 2.0
+                           if len(world_positions) else np.zeros(3))
+        positions = (world_positions - self.geo_origin).astype(np.float32)
         indices = np.asarray(world.arrays["mesh/indices"], dtype=np.uint32).reshape(-1, 3)
         node_attr = np.asarray(world.arrays["mesh/node"], dtype=np.int64)
 
@@ -102,7 +110,8 @@ class EmbreeScene:
               **_ignored):
         n = len(directions)
         rays = np.empty((n, 6), dtype=np.float32)
-        rays[:, 0:3] = origin.astype(np.float32)
+        rays[:, 0:3] = (np.asarray(origin, dtype=np.float64)
+                        - self.geo_origin).astype(np.float32)
         rays[:, 3:6] = directions.astype(np.float32)
         result = self.scene.cast_rays(self._o3d.core.Tensor(rays))
 

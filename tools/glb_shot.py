@@ -24,6 +24,7 @@ import io
 import json
 import struct
 from pathlib import Path
+from urllib.parse import unquote
 
 import numpy as np
 
@@ -33,7 +34,26 @@ COUNT = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
 
 def read_glb(path: str | Path) -> tuple[dict, bytes]:
-    raw = Path(path).read_bytes()
+    """Load .glb or .gltf. Returns the document and its single binary blob.
+
+    Both forms are here because both backends are: `gltf_textured` writes a
+    self-contained .glb, and the themed `gltf` backend writes .gltf with a
+    sidecar .bin and a tex/ directory. A renderer that only read one of them
+    could not compare them, which is the entire point of the round trip.
+    """
+    path = Path(path)
+    raw = path.read_bytes()
+    if raw[:4] != b"glTF":
+        gltf = json.loads(raw)
+        buffers = gltf.get("buffers", [])
+        uri = buffers[0].get("uri") if buffers else None
+        if uri is None:
+            return gltf, b""
+        if uri.startswith("data:"):
+            import base64
+            return gltf, base64.b64decode(uri.split(",", 1)[1])
+        return gltf, (path.parent / unquote(uri)).read_bytes()
+
     magic, version, _ = struct.unpack_from("<III", raw, 0)
     if magic != 0x46546C67:
         raise ValueError(f"{path} is not a glb (magic {magic:#x})")
@@ -59,6 +79,48 @@ def accessor(gltf: dict, binary: bytes, index: int) -> np.ndarray:
     n = spec["count"] * COUNT[spec["type"]]
     values = np.frombuffer(binary, dtype=dtype, count=n, offset=start)
     return values.reshape(spec["count"], COUNT[spec["type"]])
+
+
+def node_transforms(gltf: dict) -> dict[int, np.ndarray]:
+    """Mesh index -> world matrix, walking the scene graph.
+
+    Ignoring this is not a cosmetic shortcut. The themed backend keeps its
+    geometry Z-up and puts the axis swap and the georeference offset in the node
+    matrix, so a renderer that skips it draws the world on its side and in the
+    wrong place -- and then the round-trip comparison measures the renderer
+    rather than the compiler.
+    """
+    out: dict[int, np.ndarray] = {}
+
+    def local(node: dict) -> np.ndarray:
+        if "matrix" in node:
+            return np.asarray(node["matrix"], dtype=float).reshape(4, 4).T
+        matrix = np.eye(4)
+        if "scale" in node:
+            matrix[:3, :3] = np.diag(node["scale"])
+        if "rotation" in node:
+            x, y, z, w = node["rotation"]
+            matrix[:3, :3] = np.array([
+                [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+            ]) @ matrix[:3, :3]
+        if "translation" in node:
+            matrix[:3, 3] = node["translation"]
+        return matrix
+
+    def walk(index: int, parent: np.ndarray) -> None:
+        node = gltf["nodes"][index]
+        here = parent @ local(node)
+        if "mesh" in node:
+            out[node["mesh"]] = here
+        for child in node.get("children", []):
+            walk(child, here)
+
+    scene = gltf.get("scenes", [{}])[gltf.get("scene", 0)]
+    for root in scene.get("nodes", range(len(gltf.get("nodes", [])))):
+        walk(root, np.eye(4))
+    return out
 
 
 def _look_at(eye, target, up=(0, 1, 0)) -> np.ndarray:
@@ -89,9 +151,13 @@ def render(path: str | Path, *, eye, target, width=1280, height=720, fov=60.0,
     colour[:] = np.asarray(sky, dtype=np.float32) / 255.0
     depth = np.full((height, width), np.inf, dtype=np.float32)
 
-    for mesh in gltf.get("meshes", []):
+    placement = node_transforms(gltf)
+    for mesh_index, mesh in enumerate(gltf.get("meshes", [])):
+        model = placement.get(mesh_index, np.eye(4))
         for primitive in mesh["primitives"]:
             position = accessor(gltf, binary, primitive["attributes"]["POSITION"])
+            position = (model @ np.column_stack(
+                [position, np.ones(len(position))]).T).T[:, :3]
             index = accessor(gltf, binary, primitive["indices"]).reshape(-1)
             material = gltf["materials"][primitive["material"]]
             pbr = material.get("pbrMetallicRoughness", {})
@@ -100,10 +166,16 @@ def render(path: str | Path, *, eye, target, width=1280, height=720, fov=60.0,
             uv = None
             if "baseColorTexture" in pbr and "TEXCOORD_0" in primitive["attributes"]:
                 source = gltf["textures"][pbr["baseColorTexture"]["index"]]["source"]
-                image_view = gltf["bufferViews"][gltf["images"][source]["bufferView"]]
-                blob = binary[image_view.get("byteOffset", 0):
-                              image_view.get("byteOffset", 0) + image_view["byteLength"]]
-                texture = np.asarray(Image.open(io.BytesIO(blob)).convert("RGB"),
+                spec = gltf["images"][source]
+                if "bufferView" in spec:
+                    view = gltf["bufferViews"][spec["bufferView"]]
+                    start = view.get("byteOffset", 0)
+                    handle = io.BytesIO(binary[start: start + view["byteLength"]])
+                else:
+                    # Themed exports keep their baked textures in a sidecar
+                    # directory rather than in the buffer.
+                    handle = Path(path).parent / unquote(spec["uri"])
+                texture = np.asarray(Image.open(handle).convert("RGB"),
                                      dtype=np.float32) / 255.0
                 uv = accessor(gltf, binary, primitive["attributes"]["TEXCOORD_0"])
             base = np.asarray(pbr.get("baseColorFactor", [0.7, 0.7, 0.7, 1])[:3],
@@ -178,14 +250,27 @@ def render(path: str | Path, *, eye, target, width=1280, height=720, fov=60.0,
 
 
 def bounds(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """World-space extent, with node placement applied.
+
+    Accessor min/max are in the mesh's own frame. Framing a camera on those
+    while the node rotates and translates the mesh points the camera at empty
+    space, which looks exactly like an empty world.
+    """
     gltf, _ = read_glb(path)
+    placement = node_transforms(gltf)
     lo = np.full(3, np.inf)
     hi = np.full(3, -np.inf)
-    for mesh in gltf.get("meshes", []):
+    for mesh_index, mesh in enumerate(gltf.get("meshes", [])):
+        model = placement.get(mesh_index, np.eye(4))
         for primitive in mesh["primitives"]:
             spec = gltf["accessors"][primitive["attributes"]["POSITION"]]
-            lo = np.minimum(lo, spec["min"])
-            hi = np.maximum(hi, spec["max"])
+            box = np.array([spec["min"], spec["max"]], dtype=float)
+            corners = np.array(np.meshgrid(*box.T.tolist(), indexing="ij")
+                               ).reshape(3, -1).T
+            placed = (model @ np.column_stack(
+                [corners, np.ones(len(corners))]).T).T[:, :3]
+            lo = np.minimum(lo, placed.min(axis=0))
+            hi = np.maximum(hi, placed.max(axis=0))
     return lo, hi
 
 

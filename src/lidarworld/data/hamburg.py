@@ -116,6 +116,84 @@ MODEL = {
 TEXTURE_GSD_M = 0.20
 
 
+#: Everything else the city publishes that a *world* needs, as opposed to a pile
+#: of buildings. The first Hamburg render put a correct inner-city block on a
+#: green field with no streets, and that was not a rendering fault: the building
+#: model is the only thing that had been acquired. Buildings are the figure;
+#: these are the ground.
+#:
+#: All dl-de/by-2-0, all direct download, all resolved live from the Hamburg
+#: Transparenzportal CKAN API on 2026-08-17 rather than read off a page.
+ARCHIVE = "https://archiv.transparenz.hamburg.de/hmbtgarchive/HMDK"
+
+CONTEXT: dict[str, dict] = {
+    "terrain": {
+        "name": "Digitales Höhenmodell DGM 1",
+        "url": f"{ARCHIVE}/dgm1_2x2km_xyz_hh_2016-01-04_4735_snap_1_16267_snap_1.ZIP",
+        "bytes": 2_900_000_000,
+        "format": "ASCII xyz, 2 x 2 km tiles, 1 m grid",
+        "why": "The LoD3 buildings are already placed on a DGM but the DGM is "
+               "not in the package, so the ground under them is missing "
+               "entirely. Without it a street is a hole between two blocks.",
+    },
+    "roads": {
+        "name": "Straßen- und Wegenetz Hamburg (HH-SIB)",
+        "url": f"{ARCHIVE}/strassen_hh_sibstrassen_hh-sib_2014-11-20_9337_snap_1.ZIP",
+        "format": "GML",
+        "why": "Carriageway and path network. The seed's road list was empty, "
+               "so the generator had nothing to stamp and every unbuilt cell "
+               "stayed generic ground -- which the theme painted as grass, in "
+               "the middle of the Altstadt.",
+    },
+    "cadastre": {
+        "name": "ALKIS Liegenschaftskarte, ausgewählte Daten",
+        "url": f"{ARCHIVE}/alkis_liegenschaftskarte_ausgewaehltedaten_hh_2018-07-07_25591_snap_1.GML",
+        "bytes": 526_000_000,
+        "format": "GML",
+        "why": "Parcels and actual land use. This is what separates pavement "
+               "from carriageway from courtyard from park, which is the "
+               "distinction the ground surface needs and centrelines cannot "
+               "give.",
+    },
+    "orthophoto": {
+        "name": "Digitale Orthophotos 20 cm",
+        "wms": "https://geodienste.hamburg.de/HH_WMS_Cache_DOP20",
+        "why": "Ground texture, at the same 20 cm as the facades. Deliberately "
+               "*not* a bulk download: a full epoch is 15 GB of JPEG for the "
+               "whole city, and a block needs a few square kilometres. Fetch "
+               "per area of interest from the cached WMS instead.",
+        "note": "no bulk fetch -- request tiles for the AOI",
+    },
+}
+
+
+def context_urls() -> dict[str, str]:
+    """Direct downloads only; the orthophoto is a service, not a file."""
+    return {key: spec["url"] for key, spec in CONTEXT.items() if "url" in spec}
+
+
+def master_city_plan() -> list[dict]:
+    """Everything to acquire, in the order that makes a block look right soonest.
+
+    Area1 first because it is the inner city and the smallest textured package;
+    then the ground, because a correct building on a green field is still wrong;
+    then the rest of the city. Sizes are the publisher's own, so the total is
+    honest about what this costs before anything starts.
+    """
+    def entry(area: Area) -> dict:
+        # `url` is a property, so spreading __dict__ silently omits it -- which
+        # it did, and the fetcher skipped every building package without a word
+        # because its guard was `if not url: continue`. Named explicitly now.
+        return {"key": f"lod3_{area.id}", "kind": "buildings", "name": area.name,
+                "url": area.url, "bytes": area.bytes, "notes": area.notes}
+
+    plan = [entry(AREAS["area1"])]
+    plan += [{"key": k, "kind": "context", **v}
+             for k, v in CONTEXT.items() if "url" in v]
+    plan += [entry(AREAS[a]) for a in ("area2", "area3", "area5", "area4")]
+    return plan
+
+
 class _HttpFile(io.RawIOBase):
     """Enough of a seekable file for `zipfile` to work over HTTP ranges.
 

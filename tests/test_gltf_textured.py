@@ -145,3 +145,71 @@ def test_a_degenerate_face_is_counted_not_silently_dropped(tmp_path):
                     out)
     assert result["skipped"]["degenerate"] == 1
     assert result["triangles"] == 2
+
+
+def test_uv1_is_metric_not_normalised(tmp_path):
+    """A brick is 240 mm on a shed and on a warehouse.
+
+    Normalising UV1 by wall width and height was the obvious choice and it is
+    wrong: it makes one course span whatever the wall happens to be. The micro
+    channel must come out in metres so the shader divides by a real repeat.
+    """
+    small = np.array([[0, 0, 0], [4, 0, 0], [4, 0, 3], [0, 0, 3]], dtype=float)
+    big = np.array([[0, 20, 0], [40, 20, 0], [40, 20, 30], [0, 20, 30]], dtype=float)
+    out = tmp_path / "metric.glb"
+    export([Face(ring=small, kind="wall"), Face(ring=big, kind="wall")],
+           out, origin=np.zeros(3))
+    gltf, binary = read_back(out)
+    spec = gltf["accessors"][gltf["meshes"][0]["primitives"][0]
+                             ["attributes"]["TEXCOORD_1"]]
+    span = np.array(spec["max"]) - np.array(spec["min"])
+    # Both walls in one primitive: 40 m of width and 30 m of height total.
+    assert span[0] == pytest.approx(40.0, abs=1e-3)
+    assert span[1] == pytest.approx(30.0, abs=1e-3)
+
+
+def test_uv1_v_axis_is_world_up_for_a_wall(tmp_path):
+    """Masonry stacks toward the sky; if v is not up, brick courses run sideways."""
+    wall_ring = np.array([[0, 0, 0], [6, 0, 0], [6, 0, 9], [0, 0, 9]], dtype=float)
+    out = tmp_path / "up.glb"
+    export([Face(ring=wall_ring, kind="wall")], out, origin=np.zeros(3))
+    gltf, binary = read_back(out)
+    spec = gltf["accessors"][gltf["meshes"][0]["primitives"][0]
+                             ["attributes"]["TEXCOORD_1"]]
+    view = gltf["bufferViews"][spec["bufferView"]]
+    uv = np.frombuffer(binary, dtype=np.float32, count=spec["count"] * 2,
+                       offset=view["byteOffset"]).reshape(-1, 2)
+    # Vertices 0 and 2 differ by 9 m of height and 6 m of width.
+    assert abs(uv[2, 1] - uv[0, 1]) == pytest.approx(9.0, abs=1e-3)
+    assert abs(uv[1, 0] - uv[0, 0]) == pytest.approx(6.0, abs=1e-3)
+
+
+def test_masonry_does_not_rotate_at_a_corner(tmp_path):
+    """Two walls meeting at 90 degrees must both keep v pointing up.
+
+    This is the triplanar failure the guidance calls out: a world-axis
+    projection flips or rotates a directional material across a corner.
+    """
+    north = np.array([[0, 0, 0], [10, 0, 0], [10, 0, 8], [0, 0, 8]], dtype=float)
+    east = np.array([[10, 0, 0], [10, 10, 0], [10, 10, 8], [10, 0, 8]], dtype=float)
+    from lidarworld.backends.gltf_textured import wall_frame
+    for ring in (north, east):
+        u, v, _ = wall_frame(ring)
+        assert v.tolist() == [0.0, 0.0, 1.0]
+        assert abs(u[2]) < 1e-9              # u stays horizontal
+
+
+def test_the_surface_index_locates_a_wall_in_three_dimensions(tmp_path):
+    """A mask found in UV0 has to be mappable back onto a named wall."""
+    out = tmp_path / "idx.glb"
+    ring = np.array([[0, 0, 0], [6, 0, 0], [6, 0, 9], [0, 0, 9]], dtype=float)
+    result = export([Face(ring=ring, kind="wall", surface_id="surf-1",
+                          building_id="bldg-9")], out, origin=np.zeros(3))
+    assert result["surfaces"] == 1
+    index = json.loads((out.with_suffix(".surfaces.json")).read_text())
+    entry = index["surfaces"][0]
+    assert entry["surface_id"] == "surf-1"
+    assert entry["building_id"] == "bldg-9"
+    assert entry["width_m"] == pytest.approx(6.0, abs=1e-3)
+    assert entry["height_m"] == pytest.approx(9.0, abs=1e-3)
+    assert entry["v_axis"] == [0.0, 0.0, 1.0]

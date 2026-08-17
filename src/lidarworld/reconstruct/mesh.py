@@ -37,7 +37,19 @@ class MeshBuilder:
         if q == 0:
             return
         base = self._vertex_count
-        self.positions.append(corners.reshape(-1, 3).astype(np.float32))
+        # float64, deliberately, and the only array here that is.
+        #
+        # These are projected coordinates: a UTM northing is about 5.93e6, where
+        # float32 resolves 0.5 m, and an easting about 5.7e5, where it resolves
+        # 0.0625 m. Casting on the way in snapped every vertex to that grid --
+        # measured on a Hamburg block, the smallest distinct northing in the
+        # exported buffer was exactly 0.5 m against 0.0625 m in easting. The
+        # result is an anisotropic sawtooth on any wall not aligned to the axes,
+        # which is every wall in a rotated street grid, and it moved no metric.
+        #
+        # Precision has to be kept until something recentres. Backends do that
+        # and cast there, where the local range is metres and float32 is ample.
+        self.positions.append(corners.reshape(-1, 3).astype(np.float64))
         if normal.ndim == 1:
             self.normals.append(np.repeat(normal[None, :], q * 4, axis=0).astype(np.float32))
         else:
@@ -58,7 +70,7 @@ class MeshBuilder:
     def finalize(self) -> dict[str, np.ndarray]:
         if not self.positions:
             return {
-                "positions": np.zeros((0, 3), np.float32), "normals": np.zeros((0, 3), np.float32),
+                "positions": np.zeros((0, 3), np.float64), "normals": np.zeros((0, 3), np.float32),
                 "uv": np.zeros((0, 2), np.float32), "ctx": np.zeros(0, np.uint32),
                 "role": np.zeros(0, np.uint8), "node": np.zeros(0, np.uint32),
                 "indices": np.zeros((0, 3), np.uint32),
