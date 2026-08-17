@@ -165,6 +165,7 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
             walls_made += 1
             lat = lattice_stage.build_solid(roof, *roof.extent, cell=tile,
                                             ground_z=top)
+            _clip_to_footprint(lat, roof, ring)
             rid = f"{bid}.roof.{roof.id:05d}"
             world.add(Node(id=rid, role=roof.role, semantic="building",
                            kind="surface", parent=bid, confidence=0.5,
@@ -196,51 +197,31 @@ def expand(seed: dict, *, tile: float = 0.5, roof_pitch: float = 0.0) -> World:
 
 
 def _roof_patches(ring: np.ndarray, z: float, building: dict, *, start_id: int):
-    """One patch for a flat roof, two for a ridged one.
+    """A flat cap per building.
 
-    A pitch is the cheapest silhouette variety there is: the seed stores a
-    slope and a ridge bearing, and honouring them turns an identical row of
-    boxes into a street with a roofline. `hip` is built as a gable here --
-    the seed records the plane count but not where the hips break, and
-    inventing that would be a claim the evidence does not support.
+    Pitched roofs were generated here from the seed's measured slope and ridge
+    bearing and were reverted: they produced plates far larger than the
+    buildings they sat on, tilted across their neighbours, and clamping the
+    slope did not fix it. The seed's roof form is still recorded and still
+    correct -- 47 flat, 8 shed, 17 hip, 2 gable over a block -- so the
+    information is not lost. What was wrong is this function's reconstruction
+    of a plane from it: extents derived from the footprint's half-span do not
+    bound a roof plane once it is tilted about an arbitrary ridge, and the
+    result is a plate rather than a roof.
+
+    A flat cap is honest in the meantime. It is what the returns support least
+    ambiguously, and it is what the block looked right with.
     """
-    from ..segment.planes import PlanarPatch
-
     xy = ring[:, :2]
     lo, hi = xy.min(axis=0), xy.max(axis=0)
     span = hi - lo
     if float(np.min(span)) < 0.5:
         return []
-    form = str(building.get("roof", "flat"))
-    slope = float(building.get("roof_slope_deg", 0.0))
-    if form == "flat" or slope < 5.0:
-        return [_plane(np.array([0.0, 0.0, 1.0]),
-                       np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z]),
-                       np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]),
-                       (float(span[0]), float(span[1])), start_id,
-                       "surface.roof.flat")]
-
-    ridge = np.radians(float(building.get("roof_ridge_deg", 0.0)))
-    along = np.array([np.cos(ridge), np.sin(ridge), 0.0])       # ridge line
-    across = np.array([-np.sin(ridge), np.cos(ridge), 0.0])     # falls away
-    corners = np.c_[xy - (lo + hi) / 2, np.zeros(len(xy))]
-    half_a = float(np.abs(corners @ along).max())
-    half_c = float(np.abs(corners @ across).max())
-    rise = np.tan(np.radians(min(slope, 60.0))) * half_c
-    centre = np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z])
-    tilt = np.radians(min(slope, 60.0))
-
-    patches = []
-    for sign in (+1.0, -1.0):
-        # Plane tilted about the ridge, its centroid halfway down the slope.
-        normal = np.array([0.0, 0.0, np.cos(tilt)]) - sign * across * np.sin(tilt)
-        normal /= np.linalg.norm(normal)
-        v = np.cross(normal, along); v /= np.linalg.norm(v)
-        centroid = centre + sign * across * (half_c / 2) + np.array([0, 0, rise / 2])
-        patches.append(_plane(normal, centroid, along, v,
-                              (2 * half_a, half_c / max(np.cos(tilt), 1e-3)),
-                              start_id + len(patches), "surface.roof.pitched"))
-    return patches
+    return [_plane(np.array([0.0, 0.0, 1.0]),
+                   np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z]),
+                   np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]),
+                   (float(span[0]), float(span[1])), start_id,
+                   "surface.roof.flat")]
 
 
 def _plane(normal, centroid, u, v, extent, pid, role):
@@ -312,3 +293,26 @@ def _fenestrate(lattice, patch, building, index: int) -> None:
             context[max(0, u0 - 1):u0 + win_w + 1,
                     max(0, sill - 1):min(nv, top + 1)] |= int(Ctx.NEAR_OPENING)
             context[u0:u0 + win_w, sill:top] |= int(Ctx.OPENING_BOUNDARY)
+
+
+def _clip_to_footprint(lattice, patch, ring: np.ndarray) -> None:
+    """Cut the roof back to the building it belongs to.
+
+    `build_solid` fills a rectangle, because that is all a plane knows about
+    itself. A footprint is almost never a rectangle -- LoDo is full of L-shapes
+    and stepped frontages -- so the rectangle spills over the neighbours, and
+    from above the block reads as one continuous grey deck with buildings
+    poking through it. That is what it looked like.
+
+    Clipping is the whole fix: keep the cells whose centres lie inside the
+    footprint and drop the rest. Cheap, and it is the same polygon the walls
+    were extruded from, so the roof lands exactly on them.
+    """
+    from ..data.gis import point_in_polygon
+
+    nu, nv = lattice.occupancy.shape
+    iu, iv = np.meshgrid(np.arange(nu), np.arange(nv), indexing="ij")
+    uv = lattice.cell_uv(iu.ravel(), iv.ravel())
+    world_xy = patch.unproject(uv)[:, :2]
+    inside = point_in_polygon(world_xy, ring[:, :2]).reshape(nu, nv)
+    lattice.occupancy[~inside] = 0
