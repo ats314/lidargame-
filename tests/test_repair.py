@@ -237,3 +237,65 @@ def test_the_worst_fraction_policy_replaces_that_fraction():
     _, _, report = rp.repair(crop, grid, worst=0.1)
     assert report["cells_replaced"] == pytest.approx(round(0.1 * total), abs=1)
     assert report["policy"] == "worst 10%"
+
+
+# --- what the vote cannot recover ---------------------------------------------
+#
+# The hope was that many soft looks at a window would average into a sharp one.
+# They do not: on a 48-bay Helsinki building the median bay carries 0.0084 of
+# high-frequency energy against 0.0173 for a single measured bay. A vote removes
+# damage that differs bay to bay and leaves damage that every bay shares, and
+# photogrammetric smearing is shared, because every bay came from the same oblique
+# looks. These tests pin the property so the finding cannot be quietly reversed.
+
+def blurred(image, radius=4):
+    from lidarworld.features.frequency import box_blur
+    return np.clip(box_blur(image.astype(float), radius, wrap=False),
+                   0, 255).astype(np.uint8)
+
+
+def test_the_average_of_uniformly_soft_bays_is_not_sharper():
+    """Correlated damage survives the vote. This is the load-bearing negative."""
+    soft = blurred(wall())
+    crop = facade_of(soft)
+    stack = rp.cell_stack(crop, grid_of(crop))
+    model = rp.canonical(stack)
+    one = rp.sharpness(stack.cells[len(stack) // 2], stack.valid[len(stack) // 2])
+    average = rp.sharpness(model.image, model.support > 0)
+    assert average <= one * 1.1, (
+        f"the average bay reads {average:.4f} against {one:.4f} for one bay; "
+        "a vote cannot recover detail every bay is missing")
+
+
+def test_the_vote_does_recover_a_bay_damaged_on_its_own():
+    """The other half of the same point: independent damage is what a vote removes."""
+    clean = wall()
+    broken = damage(clean, 4, 3, "flood")
+    crop = facade_of(broken)
+    stack = rp.cell_stack(crop, grid_of(crop))
+    model = rp.canonical(stack)
+    # The average is closer to the clean facade than the damaged bay was.
+    worst = int(np.argmax(model.disagreement))
+    clean_stack = rp.cell_stack(facade_of(clean), grid_of(crop))
+    truth = clean_stack.cells[worst]
+    assert (np.abs(model.image - truth).mean()
+            < np.abs(stack.cells[worst] - truth).mean())
+
+
+def test_selecting_the_sharpest_bay_reports_its_own_gain():
+    """It is kept for the negative result, so the number has to come with it."""
+    crop = facade_of(wall())
+    stack = rp.cell_stack(crop, grid_of(crop))
+    model = rp.canonical(stack)
+    index, record = rp.exemplar(stack, model)
+    assert 0 <= index < len(stack)
+    assert record["gain_over_the_average"] >= 1.0
+    assert record["epistemic"] == "measured"      # one real bay, not an average
+
+
+def test_alignment_reports_zero_shift_when_the_bays_already_line_up():
+    """The measurement that disposed of the registration theory."""
+    crop = facade_of(wall())
+    stack = rp.cell_stack(crop, grid_of(crop))
+    _, record = rp.align(crop, stack)
+    assert max(record["median_shift_px"]) <= 1.0, record

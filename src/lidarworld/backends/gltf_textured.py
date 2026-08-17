@@ -98,11 +98,16 @@ def export(faces: list[Face], out_path: str | Path, *,
     origin = np.asarray(origin, dtype=float)
 
     # One primitive per source image keeps the draw-call count at the number of
-    # distinct textures rather than the number of surfaces.
-    groups: dict[str | None, list[Face]] = {}
+    # distinct textures rather than the number of surfaces. Untextured faces group
+    # by `kind` instead, so a generated facade comes out as wall, glass and reveal
+    # with the three FALLBACK colours rather than as one grey solid -- which is
+    # what grouping every untextured face together produced, and it made a wall
+    # with 868 real openings punched through it render as a blank slab.
+    groups: dict[str | tuple | None, list[Face]] = {}
     for face in faces:
-        groups.setdefault(face.image if face.uv is not None else None,
-                          []).append(face)
+        key = (face.image if face.uv is not None
+               else ("kind", face.kind or ""))
+        groups.setdefault(key, []).append(face)
 
     buffer = bytearray()
     views: list[dict] = []
@@ -137,7 +142,9 @@ def export(faces: list[Face], out_path: str | Path, *,
         return len(accessors) - 1
 
     surfaces: list[dict] = []
-    for image_name, members in groups.items():
+    for key, members in groups.items():
+        # A tuple key is the untextured-by-kind case; only a string is an image.
+        image_name = key if isinstance(key, (str, Path)) else None
         positions: list[np.ndarray] = []
         uvs: list[np.ndarray] = []
         metric: list[np.ndarray] = []
