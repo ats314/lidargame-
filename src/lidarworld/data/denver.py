@@ -131,7 +131,12 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
         notes="Year built, above-grade area, commercial structure type, unit "
               "count, land area. The architectural prior: it says what kind of "
               "building should be there when the returns are too thin to say. "
-              "Continuously edited, so it describes today, not 2020.",
+              "Continuously edited, so it describes today, not 2020. Counted "
+              "over the LoDo AOI: 3,890 of 4,886 rows (80%) are condominium "
+              "records, so a parcel is not a building -- a tower is one "
+              "footprint and hundreds of stacked parcels, and anything "
+              "counting parcels to count buildings is off by two orders of "
+              "magnitude here.",
     ),
     Layer(
         id="zoning",
@@ -139,7 +144,14 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
         path="ODC_ZONE_ZONING_A", layer=209,
         role="prior", epoch="current", geometry="polygon", independence=3,
         notes="Form-based zoning encodes expected massing and height directly, "
-              "which is a stronger completion prior than land use.",
+              "which is a stronger completion prior than land use -- except "
+              "here it mostly does not. Counted over the LoDo AOI: "
+              "HEIGHT_STORIES is null or zero on 34 of 55 districts (62%), "
+              "including 9 of the 11 downtown ones. The field is real and the "
+              "prior is unusable exactly where the buildings are tallest, so "
+              "treat a present HEIGHT_STORIES as a bonus and never as the "
+              "expected case. CCD_Zoning/27 is the same layer under another "
+              "name (54 features, same schema); no reason to prefer it.",
     ),
     Layer(
         id="landuse_2020",
@@ -156,7 +168,10 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
         role="hidden_truth", epoch="2020", geometry="polyline", independence=2,
         notes="Stereocompiled from the 2020 DRAPP 4-band RGBIR acquisition at "
               "0.5 ft GSD -- the same year as the LiDAR. Truth for road-edge "
-              "and kerb recovery, which airborne returns describe poorly.",
+              "and kerb recovery, which airborne returns describe poorly. "
+              "Centrelines with no width field, so it fixes where a pavement "
+              "runs and not how wide it is; DRCOG's 2024 sidewalk polygons "
+              "are the layer that answers width.",
     ),
     Layer(
         id="street_centerlines",
@@ -164,7 +179,12 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
         path="ODC_TRANS_STREET_L", layer=145,
         role="prior", epoch="current", geometry="polyline", independence=3,
         notes="Topology of the road graph. Where the returns lose a stretch of "
-              "carriageway, the centreline says whether the road continued.",
+              "carriageway, the centreline says whether the road continued. "
+              "Use VOLCLASS for road class, not FUNCLASS: over the LoDo AOI "
+              "they flatly contradict each other, VOLCLASS calling 268 of 400 "
+              "segments ARTERIAL while FUNCLASS calls 296 of them Local-Urban "
+              "and files another 53 as 'Not in HUTF Inventory'. VOLCLASS is "
+              "the one that matches a downtown grid.",
     ),
     Layer(
         id="alleys",
@@ -237,7 +257,10 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
         notes="Surface lots specifically. LoDo is full of them and they are the "
               "commonest false positive for 'flat low building' -- having them "
               "enumerated stops the compiler inventing a one-storey box on "
-              "every asphalt rectangle.",
+              "every asphalt rectangle. TYPE separates Impervious from Gravel, "
+              "which a theme can use. Interior rings are load-bearing: a lot "
+              "wrapped around a building is a polygon with a hole, and reading "
+              "only exterior rings paves the building.",
     ),
     Layer(
         id="parkland",
@@ -248,7 +271,27 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
               "inside a park, tall returns are trees; outside one, on a footprint, "
               "they are a building. Surveyed 2026, so `manifest()` withholds it "
               "from a 2020 reconstruction on epoch grounds -- it is a "
-              "generation-mode input, and parkland boundaries barely move.",
+              "generation-mode input, and parkland boundaries barely move. "
+              "Carries PARK_TYPE, PARK_CLASS, GIS_ACRES and a FACILITIES list, "
+              "which is a prop manifest in all but name.",
+    ),
+    Layer(
+        id="playgrounds",
+        name="Playgrounds",
+        path="ODC_PARK_PLAYGROUNDS_A", layer=91,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="Zero features over the LoDo AOI, confirmed by query rather than "
+              "assumed. Catalogued anyway because the AOI is the variable here "
+              "and a park-adjacent block picks them up -- a layer absent from "
+              "one downtown crop is not a layer that does not exist.",
+    ),
+    Layer(
+        id="athletic_fields",
+        name="Athletic Fields",
+        path="ODC_PARK_ATHLETICFIELDS_A", layer=82,
+        role="prior", epoch="current", geometry="polygon", independence=3,
+        notes="Zero over LoDo, same reasoning as playgrounds. Pitch and court "
+              "outlines are flat ground that must not become building.",
     ),
 
     # ---- DRCOG regional planimetrics -------------------------------------
