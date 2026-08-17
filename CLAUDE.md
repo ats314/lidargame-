@@ -114,13 +114,22 @@ src/lidarworld/
   ingest/       LAS/LAZ, KITTI, PCD, PLY, XYZ behind one adapter interface
   spatial/      sparse voxel indexing, moment aggregation
   features/     multiscale PCA descriptors, terrain, height above ground,
-                pluggable partitioner seam (voxel default, SPT backend)
-  semantics/    vocab.py: one label table per public benchmark (ASPRS,
+                pluggable partitioner seam (voxel default, SPT backend);
+                frequency.py: macro x micro separation and de-lighting;
+                openings.py: reveals from depth, bay/storey lattice;
+                repair.py: the average bay, and what a vote cannot recover;
+                match.py: measured wall -> CC0 material, in metres
+  semantics/    transfer.py: register a local-coordinate reality mesh against
+                absolute CityGML footprints and stamp every triangle with a
+                building id and surface class;
+                vocab.py: one label table per public benchmark (ASPRS,
                 SemanticKITTI, DALES, Toronto-3D, Paris-Lille-3D, nuScenes);
                 infer.py: rule-based inference where labels are absent
   roles/        role taxonomy, context bitmask, CityGML alignment
   segment/      planar region growing, tree/vehicle/pole instancing
-  reconstruct/  tile lattices, opening detection, meshing
+  reconstruct/  tile lattices, opening detection, meshing;
+                elevation.py: build a clean facade from measured numbers --
+                openings with real reveals, plinth, cornice, sills, roof
   topology/     relations, building grouping, street frontage
   themes/       packs, resolver, procedural texture backend
   backends/     web, glTF, CityJSON  <- the only place materials exist
@@ -128,10 +137,14 @@ src/lidarworld/
                 program.py: generative programs + their measured residual,
                 seed.py: the World Seed a generator expands into a place
   data/         source catalogue, tile fetcher, header-only tile index,
+                textures.py: CC0 material libraries with their terms and each
+                texture's published real-world size,
                 catalog_index.py: published extents -> download URLs,
                 denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
+docs/GENERATED_FACADES.md
+                why the scan cannot be the surface, and what is built instead
 viewer/         dependency-free WebGL2 walkthrough
 ```
 
@@ -139,7 +152,7 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 157 tests, ~3s
+python -m pytest tests/ -q                    # 375 tests, ~10s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
@@ -149,6 +162,12 @@ lidarworld tiles . --remote --area=lon,lat,deg # what to DOWNLOAD; 6,505 Denver 
 lidarworld compile data/real --area x,y,size -o build/x \
   --footprints denver --streets denver --theme victorian --theme neon --sir
 python tools/shoot.py --out build/shots        # render it and LOOK at it
+
+# Helsinki: measure a real block, build a clean one, texture it
+python tools/citygml_join.py --storeys         # register mesh to CityGML, stamp it
+python tools/build_elevation.py --buildings 8  # measured numbers -> clean geometry
+python tools/textured_wall.py                  # one wall, close enough to judge
+python tools/texture_match.py                  # CC0 ingest, match, apply
 lidarworld validate build/x/x.lwir --scan scan.bin
 ```
 
@@ -193,7 +212,24 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    while the world looks like nothing. `tools/shoot.py` drives headless Chromium
    over the viewer and writes PNGs; it is how the fog was found drowning the
    block at 63% opacity by 100 m, and how 1,315 phantom roof "windows" were
-   spotted as pink speckle. Neither showed up in any metric.
+   spotted as pink speckle. Neither showed up in any metric. Since then it also
+   caught a reveal mask that was three bands of crop edge and no windows, a
+   lattice phase sitting on every pier instead of every window, and a "sharpest
+   bay" that was sharp because it had venetian blinds in it.
+10. **A photogrammetric facade cannot supply high frequency, and no
+    recombination of it can.** Helsinki is 7.6 cm/texel and 42 cm triangles, and
+    the wall is flat to 0.044 m locally against a 0.05 m window reveal. The
+    median of 48 bays carries *half* the detail of one bay -- the smearing is
+    correlated across bays because they share look angles, and a vote only
+    removes independent damage. `docs/GENERATED_FACADES.md` has the numbers and
+    the three failed attempts. The macro supplies identity (colour, extent,
+    rhythm, height); structure is generated or matched from a CC0 library.
+11. **The software renderer is currently the largest source of "it looks bad".**
+    `tools/glb_shot.py` point-samples with no mipmap, so masonry moirés at
+    distance, and it had no lighting model at all until a flat Lambert was added
+    -- which meant cornices, reveals and projecting sills returned base colour
+    and a relieved facade rendered as a paper cut-out. Before blaming geometry
+    for a bad render, check what the renderer is capable of showing.
 
 ## Things that wasted time before
 
@@ -203,5 +239,14 @@ Ranked by how much they hurt, which is roughly the order to fix them.
   version — make assertions proportional.
 - Backticks in `git commit -m` heredocs trigger shell substitution. Use
   `git commit -F file`.
+- Reading every `.obj` in a ContextCapture subtile. It is a quadtree written out
+  in full: 216 files across nine levels, 64 of them leaves, the rest the same
+  ground at coarser sampling. Merging them stacked 3.4x the triangles a few
+  centimetres apart and silently corrupted every Helsinki number for weeks --
+  including the claim that 60% of the mesh was webbing, which was mostly coarse
+  LOD copies. Real webbing is 2.6%. `read_directory` defaults to leaves now.
+- Aiming a camera in the source frame when the exporter converts Z-up to glTF's
+  Y-up. It puts the camera under the pavement looking at the underside of it,
+  which renders as a grey wedge and reads as broken geometry.
 - The integration token has no `actions: write`, so workflows cannot be
   dispatched directly. Trigger them with a push.
