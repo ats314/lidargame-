@@ -37,21 +37,36 @@ def polylines(geojson: dict) -> list[np.ndarray]:
     return [line for line in out if len(line) >= 2]
 
 
-def widths(geojson: dict, *, default: float = 11.0) -> list[float]:
-    """Half-width per line, from the network's own attributes where it has them.
+#: Carriageway width in metres by road class. Denver's centrelines carry a class
+#: rather than a width, so this is the lookup. Wrong by a metre is invisible;
+#: one width for every street is a city with no hierarchy.
+CARRIAGEWAY = {
+    "FREEWAY": 24.0, "EXPRESSWAY": 22.0, "MAJOR ARTERIAL": 18.0,
+    "ARTERIAL": 16.0, "MINOR ARTERIAL": 15.0, "COLLECTOR": 13.0,
+    "LOCAL": 10.0, "RESIDENTIAL": 10.0, "RAMP": 9.0, "ALLEY": 6.0,
+}
 
-    Denver's centrelines carry a road class rather than a width, so this is a
-    lookup from class to a typical carriageway. Wrong by a metre is invisible;
-    absent is a city with no streets.
-    """
-    table = {"MAJOR ARTERIAL": 18.0, "MINOR ARTERIAL": 15.0, "COLLECTOR": 13.0,
-             "LOCAL": 11.0, "ALLEY": 6.0, "FREEWAY": 24.0, "RAMP": 9.0}
+#: Fields that actually carry the class, most reliable first. VOLCLASS is the
+#: one to trust on Denver's network: FUNCLASS exists and is populated but
+#: disagrees with it -- segments VOLCLASS calls ARTERIAL are labelled
+#: "Local-Urban" by FUNCLASS -- so reading FUNCLASS gives a flat, wrong city.
+CLASS_FIELDS = ("VOLCLASS", "FUNCTIONAL_CLASS", "ROADCLASS", "STREETTYPE", "CLASS")
+
+
+def widths(geojson: dict, *, default: float = 11.0) -> list[float]:
+    """Half-width per line, from the network's own class attribute."""
     out = []
     for feature in geojson.get("features", []):
         props = feature.get("properties") or {}
-        name = str(props.get("FUNCTIONAL_CLASS") or props.get("STREETTYPE")
-                   or props.get("ROADCLASS") or "").upper()
-        width = next((w for key, w in table.items() if key in name), default)
+        name = ""
+        for key in CLASS_FIELDS:
+            if props.get(key):
+                name = str(props[key]).upper()
+                break
+        # Longest key first, so "MAJOR ARTERIAL" is not matched by "ARTERIAL".
+        width = next((w for key, w in sorted(CARRIAGEWAY.items(),
+                                             key=lambda kv: -len(kv[0]))
+                      if key in name), default)
         geometry = feature.get("geometry") or {}
         parts = 1 if geometry.get("type") == "LineString" else len(
             geometry.get("coordinates", []) or [1])
