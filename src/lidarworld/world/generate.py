@@ -184,6 +184,15 @@ def expand(seed: dict, *, tile: float = 0.5, terrain_cell: float = 1.0,
                    "epistemic": "generated"}))
         node_slots.append(bid)
 
+        # An architectural family per building. LoDo is a brick warehouse
+        # district so brick is right, but a street where every frontage is the
+        # *same* brick reads as one continuous wall -- which is exactly what it
+        # looked like. Real terraces vary: stock brick, weathered stock, and
+        # the occasional stone-fronted building.
+        #
+        # Deterministic on the footprint, so a place keeps its character across
+        # regenerations rather than reshuffling every run.
+        family = _family(ring, index)
         surfaces = extrude_stage.walls_from_footprint(ring, base, top,
                                                       start_id=walls_made)
         _mark_party_walls(surfaces, ring, neighbours, index)
@@ -193,6 +202,7 @@ def expand(seed: dict, *, tile: float = 0.5, terrain_cell: float = 1.0,
             lat = lattice_stage.build_solid(patch, width, height, cell=tile,
                                             ground_z=base)
             _fenestrate(lat, patch, building, index)
+            _restate_evidence(lat, family)
             sid = f"{bid}.wall.{patch.id:05d}"
             world.add(Node(
                 id=sid, role=patch.role, semantic="building", kind="surface",
@@ -403,3 +413,47 @@ def _mark_party_walls(surfaces, ring: np.ndarray, neighbours, index: int,
             if point_in_polygon(sample, other_ring[:, :2])[0]:
                 patch.attrs["party_wall"] = True
                 break
+
+
+#: Frontage families, and how often each appears on a street. Weights are the
+#: rough mix of a brick warehouse district: mostly stock brick, a good amount
+#: weathered, a few stone-fronted civic or bank buildings.
+FAMILIES = (("stock", 0.55), ("weathered", 0.32), ("stone", 0.13))
+
+
+def _family(ring: np.ndarray, index: int) -> str:
+    """Pick a frontage family for one building, stably."""
+    key = abs(hash((round(float(ring[:, 0].mean()), 1),
+                    round(float(ring[:, 1].mean()), 1), index))) % 1000 / 1000.0
+    running = 0.0
+    for name, weight in FAMILIES:
+        running += weight
+        if key < running:
+            return name
+    return FAMILIES[-1][0]
+
+
+def _restate_evidence(lattice, family: str) -> None:
+    """Say what a generated wall actually is, so the theme can differentiate.
+
+    `build_solid` flags every cell SPARSE_EVIDENCE and OCCLUDED, which is true
+    of a wall the compiler *inferred from thin returns*. It is the wrong claim
+    about a wall the generator *invented from a footprint*: nothing was
+    measured sparsely here, nothing was measured at all. OCCLUDED alone carries
+    that honestly.
+
+    It also had a visible cost. The victorian pack maps SPARSE_EVIDENCE to
+    weathered brick at priority 1, above the default stock brick at 0, so every
+    frontage in the block resolved to the same grubby brick and the quoin,
+    cornice and plinth rules had nothing to sit against. Clearing the flag lets
+    the articulation show, and re-applying it only for the weathered family
+    turns an accident into a choice.
+    """
+    context = lattice.context
+    context &= ~np.uint32(Ctx.SPARSE_EVIDENCE)
+    if family == "weathered":
+        context |= np.uint32(Ctx.SPARSE_EVIDENCE)
+    elif family == "stone":
+        # Stone-fronted buildings read as dressed stone across the frontage,
+        # which the pack already has a material for.
+        context |= np.uint32(Ctx.SHELTERED)
