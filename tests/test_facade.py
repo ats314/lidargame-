@@ -138,3 +138,82 @@ def test_quality_travels_in_the_dna_record():
         assert key in dna
     # The record must not decide a material; that is a later, separable stage.
     assert "material_family" not in dna
+
+
+def facade_with_bleed():
+    """A crop shaped like a real one: repeating facade on top, junk below."""
+    px = 32.0
+    height, width = int(14 * px), int(20 * px)
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    image[:, :, :] = 180
+    for x in range(0, width, int(1.5 * px)):
+        image[: int(7 * px), x:x + int(0.6 * px)] = 40
+    rng = np.random.default_rng(1)
+    image[int(7 * px):] = rng.integers(90, 170,
+                                       (height - int(7 * px), width, 3),
+                                       dtype=np.uint8)
+    return F.Facade(surface_id="s", building_id="b", image=image, px_per_m=px,
+                    width_m=20.0, height_m=14.0,
+                    origin_xyz=np.zeros(3), u_axis=np.array([1.0, 0, 0]),
+                    v_axis=np.array([0.0, 0, 1.0]), normal=np.array([0.0, -1, 0]),
+                    resolution_px_per_m=4.0, covered=1.0)
+
+
+def test_completion_replaces_the_unseen_part_and_says_how_much():
+    facade = facade_with_bleed()
+    completed, confidence, record = F.complete(facade)
+    assert completed.shape == facade.image.shape
+    assert record["strategy"] == "extend_lowest_measured_storey"
+    assert record["measured_m"] > 0
+    assert record["synthesised_m"] > 0
+    # Nothing invented may claim to be observed.
+    assert record["epistemic"] == "generated"
+
+
+def test_confidence_is_one_only_where_the_photograph_is_real():
+    facade = facade_with_bleed()
+    _, confidence, record = F.complete(facade)
+    measured_rows = int(record["measured_m"] * facade.px_per_m)
+    assert confidence[:measured_rows].min() == 1.0
+    assert confidence[-1].max() == 0.0
+    # The map must be usable as a blend mask, not merely informative.
+    assert 0.0 < confidence.mean() < 1.0
+
+
+def test_bay_alignment_survives_the_extension():
+    """Windows that do not line up with the storeys above read as broken.
+
+    The extension tiles whole storeys, so a column of dark pixels above must
+    still be a column of dark pixels below.
+    """
+    facade = facade_with_bleed()
+    completed, _, record = F.complete(facade)
+    measured_rows = int(record["measured_m"] * facade.px_per_m)
+    fill_row = measured_rows + int(1.0 * facade.px_per_m)
+    grey = completed.astype(float).mean(axis=2)
+    above = grey[measured_rows // 2] < 110
+    below = grey[min(fill_row, len(grey) - 1)] < 110
+    assert below.any()
+    assert (above == below).mean() > 0.9
+
+
+def test_the_ground_floor_is_left_blank_rather_than_bricked_over():
+    """A Hamburg ground floor is shopfronts, not a repeat of the storeys above."""
+    facade = facade_with_bleed()
+    completed, _, record = F.complete(facade)
+    band = int(record["ground_floor_m"] * facade.px_per_m)
+    ground = completed[-band:]
+    # Flat: one colour, so it reads as an unfilled zone rather than wrong brick.
+    assert ground.std() < 1.0
+
+
+def test_a_wall_with_nothing_trustworthy_is_refused_not_papered_over():
+    rng = np.random.default_rng(2)
+    noise = rng.integers(90, 170, (320, 640, 3), dtype=np.uint8)
+    facade = facade_with_bleed()
+    facade.image = noise
+    facade.height_m = 10.0
+    completed, confidence, record = F.complete(facade)
+    assert record["strategy"] == "none"
+    assert confidence.max() == 0.0
+    assert record["measured_m"] == 0.0

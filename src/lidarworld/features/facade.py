@@ -341,6 +341,84 @@ def usable_band(image: np.ndarray, px_per_m: float, *,
     return (best_start / len(profile), (best_start + best_len) / len(profile))
 
 
+#: A Hamburg ground floor is not a repeat of the storeys above it -- shopfronts,
+#: entrances, larger openings, often different stone. Extending the upper pattern
+#: over it would be confidently wrong, so it is marked as its own zone and left
+#: for a storefront treatment rather than filled with brick.
+GROUND_FLOOR_M = 4.5
+
+
+def complete(facade: "Facade") -> tuple[np.ndarray, np.ndarray, dict]:
+    """Fill the part of a wall the camera never saw, and say exactly where.
+
+    An aerial oblique gives the top of a wall and not the bottom, and the bottom
+    is where a player stands. Something has to occupy it. The choice made here
+    is to extend the *lowest measured storey* downward rather than invent a
+    facade, because that preserves the one structural property that matters
+    most and is cheapest to get wrong: bay alignment. Windows that do not line
+    up with the storeys above read as broken immediately; slightly wrong brick
+    does not.
+
+    Three outputs, and the second is the important one:
+
+        completed     measured pixels above, extended pattern below
+        confidence    1 where the photograph is real, 0 where it is not
+        record        what was done, in metres
+
+    The confidence map is not decoration. It is what lets a shader keep the
+    macro layer where it is evidence and hand over to a procedural material
+    where it is not -- and it is what stops a synthesised lower storey from
+    being mistaken later for something Hamburg measured. Nothing here is
+    `observed`; the filled region is `generated` and says so.
+    """
+    height_px, width_px = facade.image.shape[:2]
+    top_f, bottom_f = usable_band(facade.image, facade.px_per_m)
+    completed = facade.image.copy()
+    confidence = np.zeros((height_px, width_px), dtype=np.float32)
+
+    usable_px = int(round(bottom_f * height_px))
+    top_px = int(round(top_f * height_px))
+    if usable_px <= top_px:
+        # Nothing measured is trustworthy: the whole wall is for the procedural
+        # layer. Returned honestly rather than repeating noise down the wall.
+        return completed, confidence, {
+            "strategy": "none", "measured_m": 0.0,
+            "synthesised_m": round(facade.height_m, 2),
+            "ground_floor_m": round(min(GROUND_FLOOR_M, facade.height_m), 2),
+            "epistemic": "generated"}
+
+    confidence[top_px:usable_px] = 1.0
+    ground_px = int(round(GROUND_FLOOR_M * facade.px_per_m))
+    fill_end = max(usable_px, height_px - ground_px)
+
+    # Source band: the lowest measured storey, which is the closest thing to
+    # what the storeys beneath it look like.
+    storey_px = max(8, int(round(STOREY_M * facade.px_per_m)))
+    src_lo = max(top_px, usable_px - storey_px)
+    source = facade.image[src_lo:usable_px]
+    if len(source) and fill_end > usable_px:
+        # Tiled without mirroring: a mirrored course puts sills above lintels,
+        # which is visibly wrong in a way a repeat is not.
+        reps = int(np.ceil((fill_end - usable_px) / len(source)))
+        block = np.tile(source, (reps, 1, 1))[: fill_end - usable_px]
+        completed[usable_px:fill_end] = block
+
+    if height_px > fill_end:
+        # Ground floor: flat mean colour of the measured band, so it reads as a
+        # deliberately blank zone awaiting a storefront rather than as brick
+        # that happens to be wrong.
+        completed[fill_end:] = facade.image[top_px:usable_px].reshape(-1, 3).mean(axis=0)
+
+    return completed, confidence, {
+        "strategy": "extend_lowest_measured_storey",
+        "measured_m": round((bottom_f - top_f) * facade.height_m, 2),
+        "synthesised_m": round((1.0 - bottom_f) * facade.height_m, 2),
+        "ground_floor_m": round(min(GROUND_FLOOR_M, facade.height_m), 2),
+        "bay_aligned": True,
+        "epistemic": "generated",
+    }
+
+
 def load_atlas(path: str | Path) -> np.ndarray:
     from PIL import Image
     return np.asarray(Image.open(path).convert("RGB"))

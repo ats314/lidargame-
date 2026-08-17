@@ -104,6 +104,15 @@ def main() -> int:
         name = (polygon.gml_id or "wall").replace("UUID_", "")[:24]
         facade_mod.save(result, out / f"{name}.png")
 
+        # The completed macro and its confidence travel beside the measured one.
+        # The raw crop is kept unchanged for reference and A/B, exactly as the
+        # guidance asks: the source stays the truth layer.
+        completed, confidence, fill = facade_mod.complete(result)
+        from PIL import Image
+        Image.fromarray(completed).save(out / f"{name}.macro.png")
+        Image.fromarray((confidence * 255).astype(np.uint8)).save(
+            out / f"{name}.confidence.png")
+
         # UV0 over the crop is the unit square: u along the wall, v down the
         # image to match glTF, which `export` flips back.
         ring = close_ring(np.asarray(polygon.exterior, dtype=float))
@@ -117,7 +126,10 @@ def main() -> int:
                out / f"{name}.glb", image_root=out)
 
         record = result.to_dna()
-        record["macro_texture"] = f"{name}.png"
+        record["source_texture"] = f"{name}.png"
+        record["macro_texture"] = f"{name}.macro.png"
+        record["confidence_map"] = f"{name}.confidence.png"
+        record["completion"] = fill
         record["model"] = f"{name}.glb"
         record["source_atlas"] = image_path.name
         records.append(record)
