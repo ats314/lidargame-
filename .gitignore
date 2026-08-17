@@ -4,6 +4,10 @@
 # Fetched GIS bundles: the payload is downloadable, the manifest is the record.
 /data/*/*.geojson
 !/data/*/manifest.json
+# CC0 material payload: 25 MB of JPEGs, re-fetchable from the library API by key.
+# The manifest is the record -- which material, its licence, its real-world size.
+/data/textures/*
+!/data/textures/manifest.json
 *.laz
 *.las
 *.part

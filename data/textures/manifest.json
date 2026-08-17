@@ -1,0 +1,280 @@
+{
+ "what": "CC0 wall materials matched against measured Helsinki facades",
+ "libraries": [
+  {
+   "key": "polyhaven",
+   "name": "Poly Haven",
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "attribution": "not required; Poly Haven appreciated",
+   "terms": "https://polyhaven.com/license",
+   "real_world_scale_published": true
+  },
+  {
+   "key": "ambientcg",
+   "name": "ambientCG",
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "attribution": "not required",
+   "terms": "https://ambientcg.com/license",
+   "real_world_scale_published": true
+  }
+ ],
+ "fetch": "src/lidarworld/data/textures.py :: polyhaven_walls, fetch_albedo",
+ "matched_against": {
+  "course_h_m": 0.0833,
+  "course_v_m": 0.0833,
+  "course_strength": [
+   0.4,
+   0.568
+  ],
+  "roughness": 0.0068,
+  "colour": [
+   0.827,
+   1.027,
+   1.236
+  ],
+  "luminance": 0.326,
+  "source": "helsinki",
+  "resolves_coursing": false,
+  "px_per_course": 1.1
+ },
+ "chosen": {
+  "key": "blue_plaster_wall",
+  "library": "polyhaven",
+  "name": "Blue Plaster Wall",
+  "metres": 2.0,
+  "categories": [
+   "outdoor",
+   "wall",
+   "plaster-concrete"
+  ],
+  "licence": "CC0 1.0 Universal (public domain dedication)",
+  "commercial": true,
+  "epistemic": "measured elsewhere; a photograph of a different wall",
+  "tile_png": "matched_tile.png"
+ },
+ "candidates": [
+  {
+   "key": "beige_wall_001",
+   "name": "Beige Wall 001",
+   "metres": 3.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0586,
+   "course_v_m": 0.2754,
+   "roughness": 0.0025
+  },
+  {
+   "key": "asbestos_sheet",
+   "name": "Asbestos Sheet",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.1445,
+   "course_v_m": 0.0664,
+   "roughness": 0.0256
+  },
+  {
+   "key": "brick_4",
+   "name": "Brick 4",
+   "metres": 0.5,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0342,
+   "course_v_m": 0.0356,
+   "roughness": 0.071
+  },
+  {
+   "key": "beige_wall_002",
+   "name": "Beige Wall 002",
+   "metres": 3.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.3281,
+   "course_v_m": 0.041,
+   "roughness": 0.0129
+  },
+  {
+   "key": "asbestos_sheet_02",
+   "name": "Asbestos Sheet 02",
+   "metres": 1.8,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.1441,
+   "course_v_m": 0.4008,
+   "roughness": 0.0202
+  },
+  {
+   "key": "blue_plaster_weathered",
+   "name": "Blue Plaster Weathered",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.5059,
+   "course_v_m": 0.043,
+   "roughness": 0.0191
+  },
+  {
+   "key": "bamboo_wall",
+   "name": "Bamboo Wall",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0352,
+   "course_v_m": 0.4004,
+   "roughness": 0.0475
+  },
+  {
+   "key": "concrete_debris",
+   "name": "Concrete Debris",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.4453,
+   "course_v_m": 0.1133,
+   "roughness": 0.0342
+  },
+  {
+   "key": "beam_wall_01",
+   "name": "Beam Wall 01",
+   "metres": 1.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0527,
+   "course_v_m": 0.3506,
+   "roughness": 0.039
+  },
+  {
+   "key": "brushed_concrete_04",
+   "name": "Brushed Concrete 04",
+   "metres": 2.001,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0567,
+   "course_v_m": 0.0332,
+   "roughness": 0.0371
+  },
+  {
+   "key": "brick_floor_04",
+   "name": "Brick Floor 04",
+   "metres": 1.91,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.2406,
+   "course_v_m": 0.0858,
+   "roughness": 0.0389
+  },
+  {
+   "key": "concrete_wall_001",
+   "name": "Concrete Wall 001",
+   "metres": 1.5,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.085,
+   "course_v_m": 0.4805,
+   "roughness": 0.0082
+  },
+  {
+   "key": "concrete_wall_003",
+   "name": "Concrete Wall 003",
+   "metres": 3.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0381,
+   "course_v_m": 0.1348,
+   "roughness": 0.0454
+  },
+  {
+   "key": "climbing_wall_02",
+   "name": "Climbing Wall 02",
+   "metres": 1.9,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.1039,
+   "course_v_m": 0.206,
+   "roughness": 0.0222
+  },
+  {
+   "key": "blue_painted_planks",
+   "name": "Blue Painted Planks",
+   "metres": 1.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.1855,
+   "course_v_m": 0.165,
+   "roughness": 0.0741
+  },
+  {
+   "key": "concrete_wall_007",
+   "name": "Concrete Wall 007",
+   "metres": 2.16,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.1709,
+   "course_v_m": 0.6033,
+   "roughness": 0.021
+  },
+  {
+   "key": "blue_plaster_wall",
+   "name": "Blue Plaster Wall",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.4688,
+   "course_v_m": 0.0859,
+   "roughness": 0.0117
+  },
+  {
+   "key": "concrete_wall_008",
+   "name": "Concrete Wall 008",
+   "metres": 2.71,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.6749,
+   "course_v_m": 0.4525,
+   "roughness": 0.0203
+  },
+  {
+   "key": "concrete",
+   "name": "Concrete",
+   "metres": 4.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.0703,
+   "course_v_m": 0.3008,
+   "roughness": 0.0457
+  },
+  {
+   "key": "coral_fort_wall_01",
+   "name": "Coral Fort Wall 01",
+   "metres": 1.36,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.259,
+   "course_v_m": 0.0823,
+   "roughness": 0.0618
+  },
+  {
+   "key": "concrete_block_wall",
+   "name": "Concrete Block Wall",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.3633,
+   "course_v_m": 0.25,
+   "roughness": 0.0426
+  },
+  {
+   "key": "box_profile_metal_sheet",
+   "name": "Box Profile Metal Sheet",
+   "metres": 2.0,
+   "licence": "CC0 1.0 Universal (public domain dedication)",
+   "commercial": true,
+   "course_h_m": 0.1992,
+   "course_v_m": 0.2227,
+   "roughness": 0.0069
+  }
+ ],
+ "note": "payload is not committed; every entry re-downloads from its library by key. Licences are recorded, not enforced."
+}
