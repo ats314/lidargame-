@@ -13,6 +13,10 @@ export class Renderer {
   constructor(gl, world) {
     this.gl = gl;
     this.world = world;
+    // Where the haze layer sits. The world's floor, not the camera's, so the
+    // fog does not slide up and down as you fly -- LoDo spans 78 m of relief
+    // and anchoring to anything mobile makes distant blocks breathe.
+    this.fogBase = world.bounds ? world.bounds[0][2] : 0;
     this.surface = createProgram(gl, SURFACE_VS, SURFACE_FS, 'surface');
     this.pointsProgram = createProgram(gl, POINTS_VS, POINTS_FS, 'points');
     this.instanceProgram = createProgram(gl, INSTANCE_VS, INSTANCE_FS, 'instance');
@@ -195,6 +199,8 @@ export class Renderer {
     gl.uniform3fv(p.uniforms.uAmbient, env.ambient);
     gl.uniform3fv(p.uniforms.uFogColor, env.fog);
     gl.uniform1f(p.uniforms.uFogDensity, env.fogDensity);
+    gl.uniform1f(p.uniforms.uFogBase, this.fogBase);
+    gl.uniform1f(p.uniforms.uFogHeight, env.fogHeight);
     gl.uniform1f(p.uniforms.uExposure, env.exposure);
     gl.uniform1ui(p.uniforms.uHighlightNode, this.highlightNode >>> 0);
     gl.uniform1ui(p.uniforms.uContextMask, this.contextMask >>> 0);
@@ -217,6 +223,8 @@ export class Renderer {
     gl.uniform3fv(p.uniforms.uAmbient, env.ambient);
     gl.uniform3fv(p.uniforms.uFogColor, env.fog);
     gl.uniform1f(p.uniforms.uFogDensity, env.fogDensity);
+    gl.uniform1f(p.uniforms.uFogBase, this.fogBase);
+    gl.uniform1f(p.uniforms.uFogHeight, env.fogHeight);
     gl.uniform1f(p.uniforms.uExposure, env.exposure);
     for (const group of this.instanceGroups) {
       gl.bindVertexArray(group.vao);
@@ -235,6 +243,8 @@ export class Renderer {
     gl.uniform1i(p.uniforms.uColorMode, this.pointColorMode);
     gl.uniform3fv(p.uniforms.uFogColor, env.fog);
     gl.uniform1f(p.uniforms.uFogDensity, env.fogDensity * 0.5);
+    gl.uniform1f(p.uniforms.uFogBase, this.fogBase);
+    gl.uniform1f(p.uniforms.uFogHeight, env.fogHeight);
     gl.drawArrays(gl.POINTS, 0, this.pointCount);
   }
 }

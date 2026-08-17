@@ -22,8 +22,41 @@ vec3 shade(vec3 albedo, vec3 normal, vec3 viewDir, float roughness, float metall
   return albedo * (sunColor * wrapped + indirect) + sunColor * spec;
 }
 
-vec3 applyFog(vec3 color, vec3 fogColor, float dist, float density) {
-  float f = 1.0 - exp(-dist * density);
+`;
+
+// Shared by every pass that draws into the scene: surfaces, instance proxies
+// and the raw point cloud must agree about the atmosphere, or the points
+// visibly float in front of the buildings they were meshed from.
+const FOG = /* glsl */`
+// Haze is a layer lying on the ground, not a uniform medium filling the sky.
+// Treating it as uniform is what drowned the overview: at 95 m up, looking
+// across a 500 m block, every sightline is 500-700 m long and a constant
+// density turns the whole frame white -- while the same constant is correct at
+// street level, where it looks right.
+//
+// So attenuate density with altitude, rho(z) = rho0 * exp(-(z - base) / H),
+// and integrate it along the view ray. That integral has a closed form:
+//
+//     mean = (exp(-hc) - exp(-hf)) / (hf - hc)
+//
+// in units of the scale height, which is just the average of exp(-h) between
+// the two ends. Multiply by density and distance for the optical depth.
+//
+// The property that makes this safe: when both ends sit at the bottom of the
+// layer, hc ~ hf ~ 0, mean -> 1, and it reduces exactly to the old
+// exp(-dist * density). Street level is untouched; only cameras that climb out
+// of the haze see through it.
+float fogFactor(float cameraZ, float worldZ, float dist, float density,
+                float base, float scaleHeight) {
+  float hc = max(cameraZ - base, 0.0) / scaleHeight;
+  float hf = max(worldZ - base, 0.0) / scaleHeight;
+  float dh = hf - hc;
+  // The quotient is 0/0 when the ray is level; that limit is exp(-hc).
+  float mean = abs(dh) < 1e-4 ? exp(-hc) : (exp(-hc) - exp(-hf)) / dh;
+  return 1.0 - exp(-dist * density * mean);
+}
+
+vec3 applyFog(vec3 color, vec3 fogColor, float f) {
   return mix(color, fogColor, clamp(f, 0.0, 1.0));
 }
 `;
@@ -85,6 +118,8 @@ uniform vec3 uSunColor;
 uniform vec3 uAmbient;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
+uniform float uFogBase;
+uniform float uFogHeight;
 uniform vec3 uCameraPosition;
 uniform float uExposure;
 uniform uint uHighlightNode;
@@ -93,6 +128,7 @@ uniform int uDebugMode;        // 0 theme, 1 context, 2 role, 3 confidence-ish
 
 out vec4 fragColor;
 
+${FOG}
 ${LIGHTING}
 
 vec3 roleColor(uint role) {
@@ -142,7 +178,8 @@ void main() {
 
   if (vNode == uHighlightNode) lit = mix(lit, vec3(0.2, 1.0, 0.9), 0.45);
 
-  lit = applyFog(lit, uFogColor, vDistance, uFogDensity);
+  lit = applyFog(lit, uFogColor, fogFactor(uCameraPosition.z, vWorld.z, vDistance,
+                                           uFogDensity, uFogBase, uFogHeight));
   lit = 1.0 - exp(-lit * uExposure);
   fragColor = vec4(pow(max(lit, 0.0), vec3(1.0 / 2.2)), color.a);
 }`;
@@ -159,6 +196,7 @@ uniform int uColorMode;   // 0 semantic, 1 role, 2 confidence
 
 out vec3 vColor;
 out float vDistance;
+out float vWorldZ;
 
 vec3 palette(uint id) {
   float h = fract(float(id) * 0.6180339887 + 0.12);
@@ -175,6 +213,7 @@ void main() {
   else vColor = mix(vec3(0.9, 0.25, 0.25), vec3(0.25, 0.9, 0.55), confidence);
 
   vDistance = length(aPosition - uCameraPosition);
+  vWorldZ = aPosition.z;
   gl_Position = uViewProjection * vec4(aPosition, 1.0);
   gl_PointSize = clamp(uPointScale / max(vDistance, 1.0), 1.0, 6.0);
 }`;
@@ -183,14 +222,19 @@ export const POINTS_FS = /* glsl */`#version 300 es
 precision highp float;
 in vec3 vColor;
 in float vDistance;
+in float vWorldZ;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
+uniform float uFogBase;
+uniform float uFogHeight;
+uniform vec3 uCameraPosition;
 out vec4 fragColor;
-
+${FOG}
 void main() {
   vec2 d = gl_PointCoord - vec2(0.5);
   if (dot(d, d) > 0.25) discard;
-  float f = 1.0 - exp(-vDistance * uFogDensity);
+  float f = fogFactor(uCameraPosition.z, vWorldZ, vDistance, uFogDensity,
+                      uFogBase, uFogHeight);
   fragColor = vec4(mix(vColor, uFogColor, clamp(f, 0.0, 1.0)), 1.0);
 }`;
 
@@ -208,12 +252,14 @@ uniform vec3 uCameraPosition;
 out vec3 vNormal;
 out vec4 vTint;
 out float vDistance;
+out float vWorldZ;
 
 void main() {
   vec3 world = aPosition * aScale + aOffset;
   vNormal = normalize(aNormal / max(aScale, vec3(0.001)));
   vTint = aTint;
   vDistance = length(world - uCameraPosition);
+  vWorldZ = world.z;
   gl_Position = uViewProjection * vec4(world, 1.0);
 }`;
 
@@ -222,20 +268,25 @@ precision highp float;
 in vec3 vNormal;
 in vec4 vTint;
 in float vDistance;
+in float vWorldZ;
 
 uniform vec3 uSunDirection;
 uniform vec3 uSunColor;
 uniform vec3 uAmbient;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
+uniform float uFogBase;
+uniform float uFogHeight;
+uniform vec3 uCameraPosition;
 uniform float uExposure;
 out vec4 fragColor;
-
+${FOG}
 void main() {
   vec3 normal = normalize(vNormal);
   float ndl = max(dot(normal, normalize(uSunDirection)), 0.0) * 0.8 + 0.2;
   vec3 lit = vTint.rgb * (uSunColor * ndl + uAmbient * (normal.z * 0.5 + 0.75));
-  float f = 1.0 - exp(-vDistance * uFogDensity);
+  float f = fogFactor(uCameraPosition.z, vWorldZ, vDistance, uFogDensity,
+                      uFogBase, uFogHeight);
   lit = mix(lit, uFogColor, clamp(f, 0.0, 1.0));
   lit = 1.0 - exp(-lit * uExposure);
   fragColor = vec4(pow(max(lit, 0.0), vec3(1.0 / 2.2)), vTint.a);

@@ -113,6 +113,12 @@ export function environmentOf(theme) {
     horizon: env.horizon || [0.72, 0.76, 0.8],
     fog: env.fog || [0.66, 0.7, 0.75],
     fogDensity: env.fogDensity ?? 0.008,
+    // Scale height of the haze layer, metres. Density at the ground is
+    // fogDensity and falls off by 1/e every fogHeight above it, so a camera
+    // that climbs out of the layer sees through it. 55 m is a little above
+    // LoDo's roofline, which is what makes a rooftop view clear while a street
+    // view keeps its depth.
+    fogHeight: env.fogHeight ?? 55,
     sunDirection: env.sunDirection || [0.35, 0.55, 0.75],
     sunColor: env.sunColor || [1, 0.97, 0.9],
     ambient: env.ambient || [0.4, 0.42, 0.46],
