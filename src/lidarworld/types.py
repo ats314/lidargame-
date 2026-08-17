@@ -256,6 +256,9 @@ RELATIONS = (
 )
 
 
+from .world.records import RepairLog  # noqa: E402
+
+
 class World:
     """The Spatial IR. Theme-independent, engine-independent, inspectable."""
 
@@ -274,10 +277,28 @@ class World:
         #: Generative programs whose execution produced part of this world.
         #: The parameters, not the geometry -- see ir/program.py.
         self.programs: list[Any] = []
+        #: Gaps classified and repairs performed while building this world.
+        #: Geometry cannot answer "was this measured?" -- an inferred wall and a
+        #: measured one are the same triangles -- so the answer is written at
+        #: the moment of the decision. See world/records.py.
+        self.repairs = RepairLog()
         self.stages: list[StageRecord] = []
         self.arrays: dict[str, np.ndarray] = {}
         self.points: PointCloud | None = None
         self.notes: dict[str, Any] = {}
+
+    def resolution_proof(self, entity_id: str) -> dict | None:
+        """Why this part of the world exists, and how defensible it is.
+
+        The question that separates a resolved world from a plausible one. A
+        procedural city can produce a building; only a world that recorded its
+        decisions can say that this building's height came from returns, its
+        rear wall from a footprint constraint, and its trim from a generator.
+
+        None means no completion operation touched the entity: it is whatever
+        the evidence made it.
+        """
+        return self.repairs.proof_for(entity_id)
 
     # -- graph --------------------------------------------------------------
     def add(self, node: Node) -> Node:

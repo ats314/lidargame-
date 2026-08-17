@@ -13,9 +13,10 @@ reality, and it is strict: reconstructed geometry is never `observed`, however
 dense the evidence behind it -- only the point cloud itself was observed. What
 the compiler can say honestly is how much of a surface it actually saw, since
 it tracks this per tile (`SPARSE_EVIDENCE` for cells filled by morphological
-closing, `OCCLUDED` for cells the sensor never saw). A facade that is part
-measured and part hole-filled is a genuine composition and earns `hybrid`; one
-mostly invented is `inferred`. The quantity lives in `measured_fraction`.
+closing, `OCCLUDED` for cells the sensor never saw). A facade whose cells are
+mostly backed by returns is `derived` -- the fit and its clipping follow
+deterministically from those returns -- and one mostly invented is `inferred`.
+The quantity lives in `measured_fraction`.
 
 **Provenance mode.** Which pass created a node is recorded during compilation,
 so it maps directly onto SIR's provenance modes rather than being asserted.
@@ -109,13 +110,18 @@ def _epistemic_state(world: World, node) -> tuple[str, float]:
     invented = ((solid & Ctx.SPARSE_EVIDENCE) | (solid & Ctx.OCCLUDED)).astype(bool)
     measured = 1.0 - float(invented.mean())
     # Never `observed`. SPEC.md is explicit and correct about this: a wall
-    # reconstructed from a point cloud is `inferred` no matter how dense the
-    # evidence -- only the point cloud itself was observed. A surface that is
-    # part measured and part hole-filled is genuinely a composition, so it
-    # earns `hybrid`; the quantitative story lives in measured_fraction and in
-    # the geometry confidence, not in a state that overclaims.
+    # reconstructed from a point cloud is not a measurement however dense the
+    # evidence -- only the point cloud itself was observed.
+    #
+    # A surface whose cells are mostly backed by returns is `derived`: the plane
+    # fit and its clipping are a deterministic consequence of those returns, and
+    # v0.3 has a word for exactly that. This replaces `hybrid`, which said only
+    # "a composition of states" -- a vaguer claim about a better-understood
+    # thing. The quantitative story stays in measured_fraction, which is where
+    # it belongs; the state says which kind of claim is being made, not how
+    # much of it.
     if measured >= 0.35:
-        return ("hybrid", measured)
+        return ("derived", measured)
     return ("inferred", measured)
 
 
@@ -296,9 +302,16 @@ def build_document(world: World, *, world_id: str | None = None) -> dict:
         "relations": relations,
         "observations": observations,
         "alternatives": [],
+        # What the compiler supplied rather than measured, and why it was
+        # allowed to. Without these the finished world cannot answer "was this
+        # part measured?" -- an inferred wall and a measured one are the same
+        # triangles, so the answer has to be written when the decision is made.
+        "repairs": [r.to_dict() for r in world.repairs.repairs],
+        "gaps": [g.to_dict() for g in world.repairs.gaps],
         "metadata": {
             "generator": "lidarworld.ir.sir",
             "stages": [s.to_json() for s in world.stages],
+            "repair_summary": world.repairs.summary(),
             "note": "Context bitmasks and theme rules have no SIR v0.1 equivalent; "
                     "epistemic_state is derived from per-tile measured evidence.",
         },

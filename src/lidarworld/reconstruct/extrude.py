@@ -119,7 +119,7 @@ def published_height(attrs, index: int) -> float | None:
 
 
 def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
-          min_height: float = 2.5, start_id: int = 0, attrs=None):
+          min_height: float = 2.5, start_id: int = 0, attrs=None, log=None):
     """Extrude every footprint whose roof height is known, measured or published.
 
     Returns (walls, programs). The programs are the generative description
@@ -177,4 +177,35 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
             patch.attrs["program"] = program.id
         programs.append(program)
         walls.extend(new)
+
+        if log is not None:
+            # This pass is Pass B, building envelope closure, and it has always
+            # been a repair -- airborne returns do not describe these walls, the
+            # footprint and a roof height do. Recording it is what stops an
+            # invented wall being counted as evidence downstream.
+            #
+            # Tier 3: the wall is a geometric consequence of an authoritative
+            # boundary and a height, not a guess from context. The output is
+            # still `inferred` rather than `derived`, because the *evidence* for
+            # a facade the sensor never saw is the footprint's existence, not a
+            # measurement of the facade.
+            log.repair(
+                pass_name="building_closure", tier=3,
+                operation="extrude_envelope_from_footprint",
+                target_entity_id=program.id,
+                epistemic_output_state="inferred",
+                output_geometry_ids=[f"patch.{p.id}" for p in new],
+                evidence_ids=([f"footprint.{f:04d}"]
+                              + [f"patch.{patches[i].id}" for i in group]),
+                reason=(f"airborne returns do not describe these facades; "
+                        f"{len(new)} walls closed from the footprint to a "
+                        f"{source} roof height"),
+                confidence=0.75 if source == "measured" else 0.45,
+                max_displacement=round(float(top - base), 3),
+                algorithm="lidarworld.reconstruct.extrude.build",
+                parameters={"ring_vertices": int(len(ring)), "base_z": round(base, 3),
+                            "top_z": round(float(top), 3), "height_source": source,
+                            "min_height": min_height,
+                            "published_height": program.params.get("published_height")},
+            )
     return walls, programs
