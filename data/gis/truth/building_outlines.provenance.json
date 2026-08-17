@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PROP_BUILDINGOUTLINES_A/FeatureServer/111",
   "role": "hidden_truth",
   "epoch": "2022",
+  "withheld": true,
+  "withheld_reason": "hidden_truth: withheld so a score against it is honest",
   "independence": 2,
   "independence_note": "independent modality",
   "geometry_declared": "polygon",
@@ -20,8 +22,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:11+00:00",
-  "fetch_seconds": 3.0,
+  "fetched_at": "2026-08-17T01:18:29+00:00",
+  "fetch_seconds": 3.1,
   "features": 1821,
   "fields_present": [
     "BLDG_HEIGH",

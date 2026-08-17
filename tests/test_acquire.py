@@ -66,20 +66,40 @@ def test_truth_never_lands_where_the_compiler_reads(service, tmp_path):
     summary = acquire.acquire(BBOX, tmp_path, progress=None)
     assert not summary["failed"], summary["failed"]
 
-    withheld = {l.id for l in denver.LAYERS.values()
-                if l.role in ("hidden_truth", "later_epoch")}
-    assert withheld, "the point of the test is that some layers are withheld"
+    # Whatever the manifest withheld, for whatever reason -- not just the two
+    # withholding roles. This is the assertion that failed before: a `prior`
+    # surveyed after the scan is withheld on epoch grounds and was still being
+    # routed to prior/ by its role.
+    plan = denver.manifest(BBOX, epoch="2020", mode="reconstruction")
+    withheld = {entry["id"] for entry in plan["withheld"]}
+    admitted = {entry["id"] for entry in plan["layers"]}
+    assert withheld and admitted
 
-    on_disk = {name: {p.stem.split(".")[0] for p in (tmp_path / name).glob("*.geojson")}
+    epoch_only = withheld - {l.id for l in denver.LAYERS.values()
+                             if l.role in ("hidden_truth", "later_epoch")}
+    assert epoch_only, ("expected at least one layer withheld purely on epoch; "
+                        "without one this test cannot see the bug it exists for")
+
+    on_disk = {name: {p.name.split(".")[0] for p in (tmp_path / name).glob("*.geojson")}
                for name in ("input", "prior", "truth")}
     assert withheld <= on_disk["truth"]
     assert not (withheld & on_disk["input"])
     assert not (withheld & on_disk["prior"])
+    assert admitted == on_disk["input"] | on_disk["prior"]
 
     # ...and reading it back cannot surface them either.
     loaded = acquire.load(tmp_path)
     assert not (withheld & set(loaded))
-    assert "parcels" in loaded
+    assert set(loaded) == admitted
+
+
+def test_withholding_reason_travels_with_the_file(service, tmp_path):
+    acquire.acquire(BBOX, tmp_path, progress=None)
+    record = json.loads(
+        (tmp_path / "truth" / "parkland.provenance.json").read_text())
+    assert record["withheld"] is True
+    assert "after the 2020 observation" in record["withheld_reason"]
+    assert record["role"] == "prior", "role is unchanged; only the routing moved"
 
 
 def test_provenance_records_what_arrived_not_what_was_claimed(service, tmp_path):

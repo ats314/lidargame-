@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENG_SRVSUBDIVISIONS_A/FeatureServer/54",
   "role": "prior",
   "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polygon",
@@ -21,8 +23,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:03:58+00:00",
-  "fetch_seconds": 0.7,
+  "fetched_at": "2026-08-17T01:18:18+00:00",
+  "fetch_seconds": 0.8,
   "features": 21,
   "fields_present": [
     "CLERK_NUMBER",

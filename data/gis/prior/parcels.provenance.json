@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PROP_PARCELS_A/FeatureServer/245",
   "role": "prior",
   "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polygon",
@@ -21,8 +23,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:03:14+00:00",
-  "fetch_seconds": 9.8,
+  "fetched_at": "2026-08-17T01:17:36+00:00",
+  "fetch_seconds": 57.3,
   "features": 4886,
   "fields_present": [
     "APPENDAGE",

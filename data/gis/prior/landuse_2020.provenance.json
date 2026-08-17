@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PLAN_EXISTINGLANDUSE2020_A/FeatureServer/319",
   "role": "prior",
   "epoch": "2020",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 2,
   "independence_note": "independent modality",
   "geometry_declared": "polygon",
@@ -21,7 +23,7 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:03:16+00:00",
+  "fetched_at": "2026-08-17T01:17:38+00:00",
   "fetch_seconds": 1.4,
   "features": 849,
   "fields_present": [

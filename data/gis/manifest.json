@@ -63,6 +63,78 @@
       "independence": 3,
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/DPR_Parkland_2026/FeatureServer/0",
       "reason": "surveyed 2026, after the 2020 observation"
+    },
+    {
+      "id": "roofprints_2024",
+      "name": "DRCOG Building Roofprints 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_BUILDING_ROOFPRINTS_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "sidewalk_polygons_2024",
+      "name": "DRCOG Sidewalk Polygons 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_POLYGON_SIDEWALKS_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "edge_pavement_polygon_2024",
+      "name": "DRCOG Edge of Pavement Polygons 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_EDGE_PAVEMENT_POLYGON_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "edge_pavement_line_2024",
+      "name": "DRCOG Edge of Pavement Lines 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_EDGE_PAVEMENT_LINE_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "paved_parking_2024",
+      "name": "DRCOG Paved Parking 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_PAVED_PARKING_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "driveways_2024",
+      "name": "DRCOG Driveway Polygons 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_POLYGON_DRIVEWAYS_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "ramps_2024",
+      "name": "DRCOG Ramps 2024",
+      "role": "prior",
+      "epoch": "2024",
+      "independence": 2,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_RAMPS_TOTAL/MapServer/0",
+      "reason": "surveyed 2024, after the 2020 observation"
+    },
+    {
+      "id": "tip_polygons_2024_2027",
+      "name": "DRCOG TIP Polygons 2024-2027",
+      "role": "later_epoch",
+      "epoch": "2024",
+      "independence": 3,
+      "url": "https://gis.drcog.org/server/rest/services/RDC/TIP_POLYGONS_2024_2027/MapServer/0",
+      "reason": "later_epoch: withheld so a score against it is honest"
     }
   ],
   "out_dir": "data/gis",
@@ -73,6 +145,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PROP_PARCELS_A/FeatureServer/245",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -90,8 +164,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:14+00:00",
-      "fetch_seconds": 9.8,
+      "fetched_at": "2026-08-17T01:17:36+00:00",
+      "fetch_seconds": 57.3,
       "features": 4886,
       "fields_present": [
         "APPENDAGE",
@@ -177,6 +251,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ZONE_ZONING_A/FeatureServer/209",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -193,7 +269,7 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:15+00:00",
+      "fetched_at": "2026-08-17T01:17:37+00:00",
       "fetch_seconds": 0.6,
       "features": 55,
       "fields_present": [
@@ -231,6 +307,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PLAN_EXISTINGLANDUSE2020_A/FeatureServer/319",
       "role": "prior",
       "epoch": "2020",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 2,
       "independence_note": "independent modality",
       "geometry_declared": "polygon",
@@ -248,7 +326,7 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:16+00:00",
+      "fetched_at": "2026-08-17T01:17:38+00:00",
       "fetch_seconds": 1.4,
       "features": 849,
       "fields_present": [
@@ -275,6 +353,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_STREET_L/FeatureServer/145",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polyline",
@@ -291,8 +371,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:17+00:00",
-      "fetch_seconds": 0.7,
+      "fetched_at": "2026-08-17T01:17:39+00:00",
+      "fetch_seconds": 0.8,
       "features": 400,
       "fields_present": [
         "ADDRESSQUAD",
@@ -373,6 +453,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PWTRN_TRN_ALLEY_L/FeatureServer/116",
       "role": "prior",
       "epoch": "2011",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polyline",
@@ -389,8 +471,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:17+00:00",
-      "fetch_seconds": 0.5,
+      "fetched_at": "2026-08-17T01:17:40+00:00",
+      "fetch_seconds": 0.7,
       "features": 90,
       "fields_present": [
         "ALLEYID",
@@ -430,6 +512,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENV_TREECANOPY2020_A/FeatureServer/348",
       "role": "prior",
       "epoch": "2020",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 2,
       "independence_note": "independent modality",
       "geometry_declared": "polygon",
@@ -446,8 +530,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:57+00:00",
-      "fetch_seconds": 39.5,
+      "fetched_at": "2026-08-17T01:18:17+00:00",
+      "fetch_seconds": 36.9,
       "features": 7,
       "fields_present": [
         "CANOPY_ACRES",
@@ -470,6 +554,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENG_SRVSUBDIVISIONS_A/FeatureServer/54",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -487,8 +573,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:03:58+00:00",
-      "fetch_seconds": 0.7,
+      "fetched_at": "2026-08-17T01:18:18+00:00",
+      "fetch_seconds": 0.8,
       "features": 21,
       "fields_present": [
         "CLERK_NUMBER",
@@ -520,6 +606,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_ENG_SRVLOTS_A/FeatureServer/46",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -537,8 +625,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:06+00:00",
-      "fetch_seconds": 8.3,
+      "fetched_at": "2026-08-17T01:18:25+00:00",
+      "fetch_seconds": 7.0,
       "features": 4626,
       "fields_present": [
         "BLOCKNUM",
@@ -562,6 +650,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_PARKING_A/FeatureServer/138",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -579,8 +669,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:07+00:00",
-      "fetch_seconds": 0.6,
+      "fetched_at": "2026-08-17T01:18:25+00:00",
+      "fetch_seconds": 0.7,
       "features": 249,
       "fields_present": [
         "BIZ_FILE_NUM",
@@ -614,6 +704,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_PARKINGLOTS_A/FeatureServer/139",
       "role": "prior",
       "epoch": "current",
+      "withheld": false,
+      "withheld_reason": "",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -630,7 +722,7 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:08+00:00",
+      "fetched_at": "2026-08-17T01:18:26+00:00",
       "fetch_seconds": 0.9,
       "features": 303,
       "fields_present": [
@@ -655,6 +747,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PROP_BUILDINGOUTLINES_A/FeatureServer/111",
       "role": "hidden_truth",
       "epoch": "2022",
+      "withheld": true,
+      "withheld_reason": "hidden_truth: withheld so a score against it is honest",
       "independence": 2,
       "independence_note": "independent modality",
       "geometry_declared": "polygon",
@@ -671,8 +765,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:11+00:00",
-      "fetch_seconds": 3.0,
+      "fetched_at": "2026-08-17T01:18:29+00:00",
+      "fetch_seconds": 3.1,
       "features": 1821,
       "fields_present": [
         "BLDG_HEIGH",
@@ -699,6 +793,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_SIDEWALKS2020_L/FeatureServer/333",
       "role": "hidden_truth",
       "epoch": "2020",
+      "withheld": true,
+      "withheld_reason": "hidden_truth: withheld so a score against it is honest",
       "independence": 2,
       "independence_note": "independent modality",
       "geometry_declared": "polyline",
@@ -715,8 +811,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:14+00:00",
-      "fetch_seconds": 3.8,
+      "fetched_at": "2026-08-17T01:18:33+00:00",
+      "fetch_seconds": 3.9,
       "features": 2546,
       "fields_present": [
         "COMMENTS",
@@ -739,6 +835,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_CURBRAMPS_P/FeatureServer/228",
       "role": "later_epoch",
       "epoch": "2022",
+      "withheld": true,
+      "withheld_reason": "later_epoch: withheld so a score against it is honest",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "point",
@@ -755,8 +853,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:15+00:00",
-      "fetch_seconds": 1.0,
+      "fetched_at": "2026-08-17T01:18:34+00:00",
+      "fetch_seconds": 1.2,
       "features": 787,
       "fields_present": [
         "COMMENTS",
@@ -777,6 +875,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_SIDEWALKS_L/FeatureServer/143",
       "role": "runtime",
       "epoch": "current",
+      "withheld": true,
+      "withheld_reason": "runtime layer: describes today, not the reconstructed epoch",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polyline",
@@ -793,8 +893,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:20+00:00",
-      "fetch_seconds": 4.2,
+      "fetched_at": "2026-08-17T01:18:39+00:00",
+      "fetch_seconds": 4.1,
       "features": 2561,
       "fields_present": [
         "ADJACENTROAD",
@@ -826,7 +926,7 @@
       ],
       "bytes": 2338048,
       "sha256": "b039a8d1d26bac6d5df064a1e15ebee57676258936f5a97260928493df023dd7",
-      "file": "prior/sidewalks_current.geojson",
+      "file": "truth/sidewalks_current.geojson",
       "truncated": false
     },
     {
@@ -835,6 +935,8 @@
       "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/DPR_Parkland_2026/FeatureServer/0",
       "role": "prior",
       "epoch": "2026",
+      "withheld": true,
+      "withheld_reason": "surveyed 2026, after the 2020 observation",
       "independence": 3,
       "independence_note": "external record",
       "geometry_declared": "polygon",
@@ -852,8 +954,8 @@
         39.755
       ],
       "out_crs": "EPSG:26913",
-      "fetched_at": "2026-08-17T01:04:20+00:00",
-      "fetch_seconds": 0.4,
+      "fetched_at": "2026-08-17T01:18:39+00:00",
+      "fetch_seconds": 0.5,
       "features": 9,
       "fields_present": [
         "ADDRESS_LINE1",
@@ -880,11 +982,355 @@
       ],
       "bytes": 20747,
       "sha256": "5b35195f9de0c04979a49e74701bfae2c7f97a88322e9ddedaecaafa7f2be955",
-      "file": "prior/parkland.geojson",
+      "file": "truth/parkland.geojson",
+      "truncated": false
+    },
+    {
+      "id": "roofprints_2024",
+      "name": "DRCOG Building Roofprints 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_BUILDING_ROOFPRINTS_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "polygon",
+      "geometry_returned": {
+        "Polygon": 1839
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "Roofprints, not footprints, which is the distinction that matters here: a roofprint is the roof edge seen from above, and that is exactly the outline airborne returns actually describe. A ground footprint differs from it by the overhang, so matching returns to a footprint charges the compiler for a discrepancy the sensor could never have resolved. Carries Bldg_Height and Ground_Elevation, same schema family as the City's Building Outlines. CAUTION: 1,839 features over the AOI against the City's 1,821, with matching field names -- these are probably one stereocompilation lineage, in which case they do not corroborate each other and only one may be used to score.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:44+00:00",
+      "fetch_seconds": 5.1,
+      "features": 1839,
+      "fields_present": [
+        "Bldg_Height",
+        "Bldg_Type",
+        "Building_ID",
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "Ground_Elevation",
+        "OBJECTID",
+        "SHAPE.STArea()",
+        "SHAPE.STLength()",
+        "Source",
+        "Update_Status"
+      ],
+      "bytes": 1699851,
+      "sha256": "aefaf86df79a2fafaa8ceca5c547a91bab1215995990cafa215585d1e559f443",
+      "file": "truth/roofprints_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "sidewalk_polygons_2024",
+      "name": "DRCOG Sidewalk Polygons 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_POLYGON_SIDEWALKS_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "polygon",
+      "geometry_returned": {
+        "Polygon": 335
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "Sidewalks as polygons rather than centrelines, so the width is surveyed instead of assumed. The pavement/kerb/carriageway split is the part of a street a game world is actually walked on, and airborne returns describe it poorly.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:46+00:00",
+      "fetch_seconds": 1.7,
+      "features": 335,
+      "fields_present": [
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "OBJECTID",
+        "SHAPE.STArea()",
+        "SHAPE.STLength()",
+        "Unique_ID",
+        "Update_Status"
+      ],
+      "bytes": 2265880,
+      "sha256": "e3d5da4df7d5e88250a7c9aa7e4ab804ef277bf0b2cc675e3ef1759b0eb035a4",
+      "file": "truth/sidewalk_polygons_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "edge_pavement_polygon_2024",
+      "name": "DRCOG Edge of Pavement Polygons 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_EDGE_PAVEMENT_POLYGON_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "polygon",
+      "geometry_returned": {
+        "Polygon": 153
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "The carriageway as a filled surface, with Surface and Type. The strongest street geometry available: centrelines say a road exists, this says where its edges are.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:47+00:00",
+      "fetch_seconds": 1.7,
+      "features": 153,
+      "fields_present": [
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "OBJECTID",
+        "SHAPE.STArea()",
+        "SHAPE.STLength()",
+        "Surface",
+        "Type",
+        "Unique_ID",
+        "Update_Status"
+      ],
+      "bytes": 2466225,
+      "sha256": "7658fe500a3757907fc7b6f8e2a6c2eed9ad2146dd142a3693ad3d1be4f701e5",
+      "file": "truth/edge_pavement_polygon_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "edge_pavement_line_2024",
+      "name": "DRCOG Edge of Pavement Lines 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_EDGE_PAVEMENT_LINE_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "polyline",
+      "geometry_returned": {
+        "LineString": 795
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "The same edges as lines, carrying a Curb flag -- which is the one attribute that says whether the pavement steps up here or runs flat, and there is no way to read that off 4 pts/m2 from above.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:50+00:00",
+      "fetch_seconds": 2.4,
+      "features": 795,
+      "fields_present": [
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "Curb",
+        "OBJECTID",
+        "SHAPE.STLength()",
+        "Surface",
+        "Unique_ID",
+        "Update_Status"
+      ],
+      "bytes": 1445571,
+      "sha256": "7e35f552a3673d5b7905ed4490b12d0efd4394df8576728abd9bfe42026434a9",
+      "file": "truth/edge_pavement_line_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "paved_parking_2024",
+      "name": "DRCOG Paved Parking 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_PAVED_PARKING_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "polygon",
+      "geometry_returned": {
+        "Polygon": 308
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "Surveyed rather than inferred parking surface. Same job as the City's parking layers and stereocompiled instead of administrative, so the two disagree in useful ways.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:51+00:00",
+      "fetch_seconds": 0.9,
+      "features": 308,
+      "fields_present": [
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "OBJECTID",
+        "SHAPE.STArea()",
+        "SHAPE.STLength()",
+        "Type",
+        "Unique_ID",
+        "Update_Status"
+      ],
+      "bytes": 519224,
+      "sha256": "583ab23729f98708d58d8b74eb9e34bb309b7d587a91607a67db1f4aaa6be1ac",
+      "file": "truth/paved_parking_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "driveways_2024",
+      "name": "DRCOG Driveway Polygons 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_POLYGON_DRIVEWAYS_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "polygon",
+      "geometry_returned": {
+        "Polygon": 5
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "Where a building meets the street surface. Thin in LoDo (5 over the AOI, it being a downtown grid) and central anywhere residential.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:51+00:00",
+      "fetch_seconds": 0.5,
+      "features": 5,
+      "fields_present": [
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "OBJECTID",
+        "SHAPE.STArea()",
+        "SHAPE.STLength()",
+        "Unique_ID",
+        "Update_Status"
+      ],
+      "bytes": 4805,
+      "sha256": "c9fa94a7e11e4a6cb9a95b88aa7ff0d2e997ba6d4e074681c1b11e5da1978576",
+      "file": "truth/driveways_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "ramps_2024",
+      "name": "DRCOG Ramps 2024",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_RAMPS_TOTAL/MapServer/0",
+      "role": "prior",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "surveyed 2024, after the 2020 observation",
+      "independence": 2,
+      "independence_note": "independent modality",
+      "geometry_declared": "point",
+      "geometry_returned": {
+        "Point": 802
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "Kerb ramps, stereocompiled. The regional counterpart to the City's 2022 curb ramps, and a crossing-geometry cue.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:53+00:00",
+      "fetch_seconds": 1.6,
+      "features": 802,
+      "fields_present": [
+        "Comments",
+        "CreateDate",
+        "CreateUser",
+        "OBJECTID",
+        "Unique_ID",
+        "Update_Status"
+      ],
+      "bytes": 204241,
+      "sha256": "11b25ad385e14b4d72f60bc32b26191abf0cd4142fd367049fac4f440a34962f",
+      "file": "truth/ramps_2024.geojson",
+      "truncated": false
+    },
+    {
+      "id": "tip_polygons_2024_2027",
+      "name": "DRCOG TIP Polygons 2024-2027",
+      "url": "https://gis.drcog.org/server/rest/services/RDC/TIP_POLYGONS_2024_2027/MapServer/0",
+      "role": "later_epoch",
+      "epoch": "2024",
+      "withheld": true,
+      "withheld_reason": "later_epoch: withheld so a score against it is honest",
+      "independence": 3,
+      "independence_note": "external record",
+      "geometry_declared": "polygon",
+      "geometry_returned": {
+        "MultiPolygon": 1
+      },
+      "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+      "attribution": "Denver Regional Council of Governments (DRCOG)",
+      "notes": "Funded transport projects for 2024-2027: not a survey of anything that existed when the scan was flown, but a record of what is about to change. Useful for explaining a disagreement between the 2020 returns and the 2024 planimetrics, and never evidence about 2020. One feature over the AOI.",
+      "aoi_wgs84": [
+        -105.002,
+        39.74,
+        -104.985,
+        39.755
+      ],
+      "out_crs": "EPSG:26913",
+      "fetched_at": "2026-08-17T01:18:55+00:00",
+      "fetch_seconds": 1.9,
+      "features": 1,
+      "fields_present": [
+        "OBJECTID",
+        "ProjectName",
+        "ProjectType",
+        "Scope",
+        "Shape.STArea()",
+        "Shape.STLength()",
+        "Sponsor",
+        "TIPID",
+        "TipYear",
+        "url"
+      ],
+      "bytes": 677714,
+      "sha256": "829222ba8c239eda144323544a6f9857bea7ca15a6e3931a03d3eb886aa28d71",
+      "file": "truth/tip_polygons_2024_2027.geojson",
       "truncated": false
     }
   ],
   "failed": [],
-  "features_total": 19210,
-  "bytes_total": 53863403
+  "features_total": 23448,
+  "bytes_total": 63146914
 }

@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_SIDEWALKS2020_L/FeatureServer/333",
   "role": "hidden_truth",
   "epoch": "2020",
+  "withheld": true,
+  "withheld_reason": "hidden_truth: withheld so a score against it is honest",
   "independence": 2,
   "independence_note": "independent modality",
   "geometry_declared": "polyline",
@@ -20,8 +22,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:14+00:00",
-  "fetch_seconds": 3.8,
+  "fetched_at": "2026-08-17T01:18:33+00:00",
+  "fetch_seconds": 3.9,
   "features": 2546,
   "fields_present": [
     "COMMENTS",

@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_CURBRAMPS_P/FeatureServer/228",
   "role": "later_epoch",
   "epoch": "2022",
+  "withheld": true,
+  "withheld_reason": "later_epoch: withheld so a score against it is honest",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "point",
@@ -20,8 +22,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:15+00:00",
-  "fetch_seconds": 1.0,
+  "fetched_at": "2026-08-17T01:18:34+00:00",
+  "fetch_seconds": 1.2,
   "features": 787,
   "fields_present": [
     "COMMENTS",

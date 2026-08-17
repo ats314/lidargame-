@@ -1,0 +1,44 @@
+{
+  "id": "edge_pavement_polygon_2024",
+  "name": "DRCOG Edge of Pavement Polygons 2024",
+  "url": "https://gis.drcog.org/server/rest/services/RDC/PLANIMETRICS_2024_EDGE_PAVEMENT_POLYGON_TOTAL/MapServer/0",
+  "role": "prior",
+  "epoch": "2024",
+  "withheld": true,
+  "withheld_reason": "surveyed 2024, after the 2020 observation",
+  "independence": 2,
+  "independence_note": "independent modality",
+  "geometry_declared": "polygon",
+  "geometry_returned": {
+    "Polygon": 153
+  },
+  "license": "DRCOG Regional Data Catalog: served open and unauthenticated; explicit terms not retrievable from the portal (JS front end over an authenticated API) as probed 2026-08-17",
+  "attribution": "Denver Regional Council of Governments (DRCOG)",
+  "notes": "The carriageway as a filled surface, with Surface and Type. The strongest street geometry available: centrelines say a road exists, this says where its edges are.",
+  "aoi_wgs84": [
+    -105.002,
+    39.74,
+    -104.985,
+    39.755
+  ],
+  "out_crs": "EPSG:26913",
+  "fetched_at": "2026-08-17T01:18:47+00:00",
+  "fetch_seconds": 1.7,
+  "features": 153,
+  "fields_present": [
+    "Comments",
+    "CreateDate",
+    "CreateUser",
+    "OBJECTID",
+    "SHAPE.STArea()",
+    "SHAPE.STLength()",
+    "Surface",
+    "Type",
+    "Unique_ID",
+    "Update_Status"
+  ],
+  "bytes": 2466225,
+  "sha256": "7658fe500a3757907fc7b6f8e2a6c2eed9ad2146dd142a3693ad3d1be4f701e5",
+  "file": "truth/edge_pavement_polygon_2024.geojson",
+  "truncated": false
+}

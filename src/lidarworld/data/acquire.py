@@ -44,8 +44,10 @@ from .denver import INDEPENDENCE, LAYERS, Layer, manifest
 
 USER_AGENT = "lidarworld/0.2 (+https://github.com/ats314/lidargame-)"
 
-#: Which directory a role lands in. Anything that must not reach the compiler
-#: goes to `truth`, and `load()` refuses to read it outside scoring.
+#: Which directory a role lands in *when the manifest admitted it*. Role is not
+#: the whole story: `manifest()` also withholds on epoch, so a plain `prior`
+#: surveyed after the scan is inadmissible evidence despite its role. Anything
+#: withheld for any reason goes to `truth` -- see `_target_dir`.
 ROLE_DIR = {
     "input": "input",
     "prior": "prior",
@@ -53,6 +55,16 @@ ROLE_DIR = {
     "hidden_truth": "truth",
     "later_epoch": "truth",
 }
+
+WITHHELD_DIR = "truth"
+
+
+def _target_dir(layer: Layer, withheld: bool) -> str:
+    """Withheld beats role. A 2026 parkland layer is a prior and still not
+    evidence for a 2020 scan, and routing it by role alone put it in `prior/`
+    where `load()` reads it -- which is the exact leak this module exists to
+    stop."""
+    return WITHHELD_DIR if withheld else ROLE_DIR[layer.role]
 
 
 class AcquisitionError(RuntimeError):
@@ -164,9 +176,10 @@ def _geometry_types(features: list[dict]) -> dict[str, int]:
 
 def acquire_layer(layer: Layer, bbox_wgs84, out_dir: str | Path, *,
                   out_crs: str = "26913", overwrite: bool = False,
+                  withheld: bool = False, withheld_reason: str = "",
                   **kwargs) -> dict:
     """Fetch one layer into `<out_dir>/<role dir>/`, with a provenance sidecar."""
-    root = Path(out_dir) / ROLE_DIR[layer.role]
+    root = Path(out_dir) / _target_dir(layer, withheld)
     root.mkdir(parents=True, exist_ok=True)
     path = root / f"{layer.id}.geojson"
     sidecar = root / f"{layer.id}.provenance.json"
@@ -186,6 +199,8 @@ def acquire_layer(layer: Layer, bbox_wgs84, out_dir: str | Path, *,
         "url": layer.url,
         "role": layer.role,
         "epoch": layer.epoch,
+        "withheld": withheld,
+        "withheld_reason": withheld_reason,
         "independence": layer.independence,
         "independence_note": INDEPENDENCE[layer.independence],
         "geometry_declared": layer.geometry,
@@ -223,17 +238,19 @@ def acquire(bbox_wgs84, out_dir: str | Path, *, epoch: str = "2020",
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    wanted = [LAYERS[entry["id"]] for entry in plan["layers"]]
+    wanted = [(LAYERS[entry["id"]], False, "") for entry in plan["layers"]]
     if include_withheld:
-        wanted += [LAYERS[entry["id"]] for entry in plan["withheld"]]
+        wanted += [(LAYERS[entry["id"]], True, entry["reason"])
+                   for entry in plan["withheld"]]
 
     acquired, failed = [], []
-    for layer in wanted:
+    for layer, withheld, reason in wanted:
         if progress:
             progress(layer, None)
         try:
             record = acquire_layer(layer, bbox_wgs84, out_dir, out_crs=out_crs,
-                                   overwrite=overwrite, **kwargs)
+                                   overwrite=overwrite, withheld=withheld,
+                                   withheld_reason=reason, **kwargs)
             acquired.append(record)
         except AcquisitionError as exc:
             failed.append({"id": layer.id, "url": layer.url, "error": str(exc)})

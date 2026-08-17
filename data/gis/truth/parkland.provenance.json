@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/DPR_Parkland_2026/FeatureServer/0",
   "role": "prior",
   "epoch": "2026",
+  "withheld": true,
+  "withheld_reason": "surveyed 2026, after the 2020 observation",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polygon",
@@ -21,8 +23,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:20+00:00",
-  "fetch_seconds": 0.4,
+  "fetched_at": "2026-08-17T01:18:39+00:00",
+  "fetch_seconds": 0.5,
   "features": 9,
   "fields_present": [
     "ADDRESS_LINE1",
@@ -49,6 +51,6 @@
   ],
   "bytes": 20747,
   "sha256": "5b35195f9de0c04979a49e74701bfae2c7f97a88322e9ddedaecaafa7f2be955",
-  "file": "prior/parkland.geojson",
+  "file": "truth/parkland.geojson",
   "truncated": false
 }

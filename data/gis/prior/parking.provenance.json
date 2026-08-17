@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_PARKING_A/FeatureServer/138",
   "role": "prior",
   "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polygon",
@@ -21,8 +23,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:07+00:00",
-  "fetch_seconds": 0.6,
+  "fetched_at": "2026-08-17T01:18:25+00:00",
+  "fetch_seconds": 0.7,
   "features": 249,
   "fields_present": [
     "BIZ_FILE_NUM",

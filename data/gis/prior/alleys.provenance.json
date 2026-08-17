@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_PWTRN_TRN_ALLEY_L/FeatureServer/116",
   "role": "prior",
   "epoch": "2011",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polyline",
@@ -20,8 +22,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:03:17+00:00",
-  "fetch_seconds": 0.5,
+  "fetched_at": "2026-08-17T01:17:40+00:00",
+  "fetch_seconds": 0.7,
   "features": 90,
   "fields_present": [
     "ALLEYID",

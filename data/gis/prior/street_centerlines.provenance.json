@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_STREET_L/FeatureServer/145",
   "role": "prior",
   "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polyline",
@@ -20,8 +22,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:03:17+00:00",
-  "fetch_seconds": 0.7,
+  "fetched_at": "2026-08-17T01:17:39+00:00",
+  "fetch_seconds": 0.8,
   "features": 400,
   "fields_present": [
     "ADDRESSQUAD",

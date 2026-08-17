@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_SIDEWALKS_L/FeatureServer/143",
   "role": "runtime",
   "epoch": "current",
+  "withheld": true,
+  "withheld_reason": "runtime layer: describes today, not the reconstructed epoch",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polyline",
@@ -20,8 +22,8 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:20+00:00",
-  "fetch_seconds": 4.2,
+  "fetched_at": "2026-08-17T01:18:39+00:00",
+  "fetch_seconds": 4.1,
   "features": 2561,
   "fields_present": [
     "ADJACENTROAD",
@@ -53,6 +55,6 @@
   ],
   "bytes": 2338048,
   "sha256": "b039a8d1d26bac6d5df064a1e15ebee57676258936f5a97260928493df023dd7",
-  "file": "prior/sidewalks_current.geojson",
+  "file": "truth/sidewalks_current.geojson",
   "truncated": false
 }

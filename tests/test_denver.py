@@ -17,7 +17,12 @@ def test_every_layer_is_addressable_and_has_a_declared_role():
     assert denver.LAYERS
     for layer in denver.LAYERS.values():
         assert layer.role in denver.ROLES, f"{layer.id} has role {layer.role!r}"
-        assert layer.url.startswith("https://services1.arcgis.com/")
+        # Two publishers now: the City on ArcGIS Online, DRCOG on its own
+        # ArcGIS Server. What matters is that the address is a REST layer
+        # endpoint, not whose host it is on.
+        assert layer.url.startswith("https://"), layer.id
+        assert layer.server in ("FeatureServer", "MapServer"), layer.id
+        assert f"/{layer.server}/" in layer.url, layer.id
         assert layer.url.endswith(f"/{layer.layer}")
         assert layer.geometry in ("polygon", "polyline", "point")
         assert layer.license and layer.attribution
@@ -153,3 +158,27 @@ def test_roles_partition_the_catalogue():
     assert counted == len(denver.LAYERS)
     assert {l.id for l in denver.layers_for("hidden_truth")} == {
         "building_outlines", "sidewalks_2020"}
+
+
+def test_the_publisher_offset_is_recorded_with_its_uncertainty():
+    """A measured 1.12 m shift, and an honest 'we do not know which end'."""
+    offset = denver.PUBLISHER_OFFSET
+    dx, dy = offset["drcog_minus_denver_m"]
+    assert abs((dx ** 2 + dy ** 2) ** 0.5 - offset["magnitude_m"]) < 1e-3
+    # Rigid, not noisy: that is what makes it a datum difference.
+    assert offset["iqr_m"] < 0.01
+    # The shift is the size of the errors being chased, so it cannot be filed
+    # away as negligible.
+    assert offset["magnitude_m"] > 1.0
+    assert offset["lidar_prefers"] == "unresolved", (
+        "if a sharper test has settled this, say which frame won and why")
+
+
+def test_the_two_building_layers_are_not_independent():
+    """They are one stereocompilation republished, so they cannot check each
+    other. The note has to say so wherever someone might reach for it."""
+    roofprints = denver.LAYERS["roofprints_2024"]
+    assert "NOT INDEPENDENT" in roofprints.notes
+    assert roofprints.independence == 2
+    outlines = denver.LAYERS["building_outlines"]
+    assert outlines.independence == 2

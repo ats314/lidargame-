@@ -4,6 +4,8 @@
   "url": "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_TRANS_PARKINGLOTS_A/FeatureServer/139",
   "role": "prior",
   "epoch": "current",
+  "withheld": false,
+  "withheld_reason": "",
   "independence": 3,
   "independence_note": "external record",
   "geometry_declared": "polygon",
@@ -20,7 +22,7 @@
     39.755
   ],
   "out_crs": "EPSG:26913",
-  "fetched_at": "2026-08-17T01:04:08+00:00",
+  "fetched_at": "2026-08-17T01:18:26+00:00",
   "fetch_seconds": 0.9,
   "features": 303,
   "fields_present": [
