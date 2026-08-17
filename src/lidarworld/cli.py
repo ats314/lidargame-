@@ -127,6 +127,11 @@ def _cmd_compile(args) -> int:
         info = write_document(world, out / f"{config.name}.sir.json")
         print(f"  spatial IR  {info['path']} (SIR v0.1: {info['entities']} entities, "
               f"{info['relations']} relations, epistemic {info['epistemic']})")
+        repairs = world.repairs.summary()
+        if repairs["repairs"] or repairs["gaps"]:
+            print(f"  repairs     {repairs['repairs']} recorded "
+                  f"{repairs['repairs_by_state']}, {repairs['gaps']} gaps "
+                  f"classified, {repairs['refused']} refused")
 
     if args.seed:
         from .ir.seed import extract, write as write_seed

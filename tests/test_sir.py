@@ -51,7 +51,11 @@ def test_epistemic_state_is_derived_not_asserted(sir_document):
     surfaces = [e for e in sir_document["entities"] if e["kind"] == "boundary"]
     assert surfaces
     states = {e["epistemic_state"] for e in surfaces}
-    assert states <= {"observed", "hybrid", "inferred"}
+    # v0.3 vocabulary. `hybrid` is gone: a surface mostly backed by returns is
+    # `derived`, because the fit follows deterministically from them, which is
+    # a sharper claim than "a composition of states".
+    assert states <= {"observed", "derived", "inferred"}
+    assert "hybrid" not in states
     # Geometry confidence is the measured fraction, so it must vary between
     # surfaces rather than being a constant stamped on everything.
     measured = {e["attributes"]["measured_fraction"] for e in surfaces}
@@ -98,3 +102,29 @@ def test_write_document_round_trips(compiled_world, tmp_path):
     assert len(document["entities"]) == info["entities"]
     assert document["world"]["up_axis"] == "Z"
     assert document["world"]["linear_unit"] == "m"
+
+
+def test_derived_must_cite_what_it_was_derived_from(sir_document):
+    """`derived` claims a deterministic consequence of evidence. Without a
+    citation the state means whatever the producer wanted, which is what
+    `hybrid` had quietly become."""
+    for entity in sir_document["entities"]:
+        if entity["epistemic_state"] != "derived":
+            continue
+        modes = {p["mode"] for p in entity["provenance"]}
+        for geometry in entity["geometry"]:
+            modes |= {p["mode"] for p in geometry.get("provenance", [])}
+        assert modes & {"sensor_observation", "structured_import",
+                        "geometric_inference"}, entity["id"]
+
+
+def test_the_superseded_vocabulary_is_gone_everywhere(sir_document):
+    """manual and imported are origin, not epistemic state, and belong in
+    provenance mode -- where they already live as manual_authoring and
+    structured_import. Carrying them in both let an entity be `imported`
+    without ever saying whether the import was measured or invented."""
+    retired = {"hybrid", "manual", "imported", "fusion"}
+    states = {e["epistemic_state"] for e in sir_document["entities"]}
+    assert not (states & retired), states & retired
+    assert states <= {"observed", "derived", "inferred", "resolved",
+                      "generated", "unknown"}

@@ -256,6 +256,9 @@ RELATIONS = (
 )
 
 
+from .world.records import RepairLog  # noqa: E402
+
+
 class World:
     """The Spatial IR. Theme-independent, engine-independent, inspectable."""
 
@@ -274,6 +277,11 @@ class World:
         #: Generative programs whose execution produced part of this world.
         #: The parameters, not the geometry -- see ir/program.py.
         self.programs: list[Any] = []
+        #: Gaps classified and repairs performed while building this world.
+        #: Geometry cannot answer "was this measured?" -- an inferred wall and a
+        #: measured one are the same triangles -- so the answer is written at
+        #: the moment of the decision. See world/records.py.
+        self.repairs = RepairLog()
         self.stages: list[StageRecord] = []
         self.arrays: dict[str, np.ndarray] = {}
         self.points: PointCloud | None = None

@@ -52,16 +52,42 @@ The `class` string remains extensible. Example classes include `Building`, `Room
 
 `epistemic_state` is one of:
 
-- `observed` — direct sensor data or directly imported authoritative geometry;
-- `inferred` — reconstructed or semantically inferred from evidence;
-- `generated` — procedurally or artistically created;
-- `manual` — explicitly authored by a human;
-- `imported` — imported from an external structured source whose own epistemic status is not reduced further;
-- `hybrid` — composition of multiple states.
+- `observed` — directly supported by declared evidence;
+- `derived` — deterministically computed from observed evidence, such as a
+  plane fit through measured returns, a plane intersection, or a surface
+  clipped to a polygon boundary;
+- `inferred` — structurally or semantically implied but not directly measured;
+- `resolved` — the canonical World Seed interpretation selected after
+  reconciling competing sources;
+- `generated` — deliberately synthesised target detail, not claimed as measured
+  reality;
+- `unknown` — evidence is insufficient or conflicting, and no canonical
+  physical claim should be made.
 
-A reconstructed wall inferred from a LiDAR point cloud is normally `inferred`, while the point-cloud observation itself is `observed`.
+A reconstructed wall inferred from a LiDAR point cloud is normally `inferred`,
+while the point-cloud observation itself is `observed`.
 
-This distinction is normative because it prevents generated or inferred detail from being silently presented as measured reality.
+`manual`, `imported`, `fusion` and similar concepts are *origin*, not
+epistemic state, and belong in provenance `mode` — where they already live.
+Carrying them in both places let an entity be `imported` without ever saying
+whether the import was measured or invented.
+
+A geometry representation carries its own epistemic state. An observed point
+set and an inferred fitted wall can belong to the same semantic entity, so the
+state is a property of the representation and not only of the entity.
+
+`unknown` is a valid and sometimes required output. The compiler must refuse to
+fill when evidence conflicts materially, when extrapolation would exceed its
+configured support, or when several hypotheses remain equally plausible.
+
+This distinction is normative because it prevents generated or inferred detail
+from being silently presented as measured reality.
+
+> Superseded v0.2, recorded so the change is legible: the earlier set was
+> `observed | inferred | generated | manual | imported | hybrid`. `hybrid` meant
+> "a composition of states" and was used for a surface part measured and part
+> hole-filled. That is `derived` — the fit is a deterministic consequence of the
+> returns — and saying so is a sharper claim than `hybrid`, not a weaker one.
 
 ## 4. Provenance
 

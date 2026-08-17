@@ -73,6 +73,28 @@ def validate_invariants(doc: Dict[str, Any]) -> None:
                         raise ValueError(
                             f"entity {e['id']} marks derived analytic geometry as observed without sensor/import provenance"
                         )
+        # `derived` claims a deterministic consequence of evidence, so it has to
+        # point at some. Without this the state is free to mean whatever the
+        # producer wanted, which is what `hybrid` had become.
+        if e.get("epistemic_state") == "derived":
+            modes = {p.get("mode") for p in e.get("provenance", [])}
+            for g in e.get("geometry", []):
+                modes |= {p.get("mode") for p in g.get("provenance", [])}
+            if not modes & {"sensor_observation", "structured_import",
+                            "geometric_inference"}:
+                raise ValueError(
+                    f"entity {e['id']} is derived but cites no observation, import "
+                    f"or geometric inference to be derived from")
+        # `generated` must never be laundered into evidence: a procedurally
+        # synthesised entity citing sensor observation is the exact confusion
+        # the epistemic model exists to prevent.
+        if e.get("epistemic_state") == "generated":
+            for g in e.get("geometry", []):
+                if any(p.get("mode") == "sensor_observation"
+                       for p in g.get("provenance", [])):
+                    raise ValueError(
+                        f"entity {e['id']} is generated but claims sensor_observation "
+                        f"provenance on its geometry")
 
 
 def validate_document(doc_path: str | Path, schema_path: str | Path) -> Dict[str, Any]:
