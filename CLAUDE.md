@@ -128,6 +128,7 @@ src/lidarworld/
                 program.py: generative programs + their measured residual,
                 seed.py: the World Seed a generator expands into a place
   data/         source catalogue, tile fetcher, header-only tile index,
+                catalog_index.py: published extents -> download URLs,
                 denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
@@ -138,12 +139,13 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 149 tests, ~3s
+python -m pytest tests/ -q                    # 157 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
 lidarworld fetch denver_lodo -o data/real     # pull a real 3DEP tile
 lidarworld tiles data/real --area x,y,size    # header-only index; what covers this?
+lidarworld tiles . --remote --area=lon,lat,deg # what to DOWNLOAD; 6,505 Denver tiles
 lidarworld compile data/real --area x,y,size -o build/x \
   --footprints denver --streets denver --theme victorian --theme neon --sir
 python tools/shoot.py --out build/shots        # render it and LOOK at it
@@ -158,30 +160,36 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    footprint before tiling.
 2. ~~Buildings do not meet the ground.~~ Fixed: wall columns extend to terrain,
    and footprints are extruded into walls where airborne data has none.
-3. **Forward validation explains ~28% of returns** (Embree backend). 5,421 rays
+3. **Building heights agree with Denver's aerial stereo to a median 1.18 m**
+   (72% within 2 m, 90% within 5 m, median bias +0.40 m: LiDAR reads slightly
+   taller, consistent with seeing parapets photogrammetry digitises past). This
+   is the *only* level-2 independent check the compiler has -- different sensor,
+   different failure modes -- and it is cheap. Add more of these before trusting
+   any self-consistency number.
+4. **Forward validation explains ~28% of returns** (Embree backend). 5,421 rays
    hit geometry that is not there and 5,010 pass through geometry that should
    be. Both are real -- swapping the voxel raycaster for exact ray-triangle
    intersection collapsed the inconclusive-grazing bucket from 10,307 to 2,333
    and raised explained from 18.5%, which proved most of the old over-occlusion
    was measurement artefact but left this residue as genuine. Symptom of 1 and
    2. This number is the scoreboard; move it.
-4. ~~Airborne data barely produces walls.~~ Addressed by extrusion: 3DEP is
+5. ~~Airborne data barely produces walls.~~ Addressed by extrusion: 3DEP is
    ~4 pts/m2 from above, two thirds of it on pavement, so facades are absent
    rather than sparse. `--footprints <id>` extrudes them from the footprint to
    the measured roof height. Denver went from 50 walls to 872.
-5. ~~**Vegetation over-segments.**~~ Fixed. Was 1197 "trees" in a 300 m Denver
+6. ~~**Vegetation over-segments.**~~ Fixed. Was 1197 "trees" in a 300 m Denver
    block with a 74 m maximum; now 307 with a 28.9 m maximum. Three causes, all
    real: return number was discarded at ingest (it is *the* canopy discriminator
    -- roof 9.3% multi-return vs scatter 70.7%), the CHM was unsmoothed with a
    fixed 3x3 window, and there was no suppression between neighbouring peaks.
    The remaining count is still probably high; there is no airborne ground truth
    in the repo to check it against, which is what DALES is for.
-6. **Topology barely groups.** 1411 patches became 1184 "structures" — almost
+7. **Topology barely groups.** 1411 patches became 1184 "structures" — almost
    no merging. Airborne roof patches rarely touch, so `relate_patches` finds
    little. Needs footprint-based grouping, not just patch adjacency.
-7. **Highlighting terrain tints the whole world**, because terrain is a single
+8. **Highlighting terrain tints the whole world**, because terrain is a single
    node. Scope the viewer's highlight to a face.
-8. **Look at the render before believing a metric.** Every number can be fine
+9. **Look at the render before believing a metric.** Every number can be fine
    while the world looks like nothing. `tools/shoot.py` drives headless Chromium
    over the viewer and writes PNGs; it is how the fog was found drowning the
    block at 63% opacity by 100 m, and how 1,315 phantom roof "windows" were

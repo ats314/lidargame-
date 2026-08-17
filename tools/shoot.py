@@ -19,12 +19,16 @@ import socketserver
 import threading
 from pathlib import Path
 
+# Eye height is measured from the ground under the camera, not from the world's
+# minimum z. A 320 m block spans 78 m of relief, so anchoring to the bounds puts
+# a "street level" camera tens of metres underground and half the frame is void.
 VIEWS = {
-    # name:        (eye offset from centre, look-at offset), metres
-    "street":      ((-60, -60, 2.0), (40, 40, 6)),
-    "corner":      ((-30, 30, 1.8), (50, -30, 10)),
-    "overview":    ((-140, -140, 90), (0, 0, 0)),
-    "roofline":    ((-70, 0, 35), (60, 0, 10)),
+    # name:      (eye offset from centre, look-at offset), metres. z is above
+    #            local terrain for the camera, above local terrain for the target.
+    "street":    ((-60, -60, 1.7), (40, 40, 8)),
+    "corner":    ((-30, 30, 1.7), (50, -30, 12)),
+    "overview":  ((-140, -140, 95), (0, 0, 0)),
+    "roofline":  ((-70, 0, 40), (60, 0, 12)),
 }
 
 
@@ -96,18 +100,22 @@ def main() -> int:
                 eye, target = VIEWS[name]
                 # The camera exposes yaw/pitch, not a look-at, so aim it the
                 # same way it aims itself: forward = (cos yaw, sin yaw).
-                page.evaluate("""([eye, target, lo, centre]) => {
+                page.evaluate("""([eye, target, centre]) => {
+                    const w = window.lidarworld.world;
                     const c = window.lidarworld.camera;
+                    const ground = (x, y) => w.heightfield.sample(x, y);
                     c.fly = true;
-                    c.position[0] = centre[0] + eye[0];
-                    c.position[1] = centre[1] + eye[1];
-                    c.position[2] = lo[2] + eye[2];
-                    const dx = (centre[0] + target[0]) - c.position[0];
-                    const dy = (centre[1] + target[1]) - c.position[1];
-                    const dz = (lo[2] + target[2]) - c.position[2];
+                    const ex = centre[0] + eye[0], ey = centre[1] + eye[1];
+                    const tx = centre[0] + target[0], ty = centre[1] + target[1];
+                    c.position[0] = ex;
+                    c.position[1] = ey;
+                    c.position[2] = ground(ex, ey) + eye[2];
+                    const dx = tx - c.position[0];
+                    const dy = ty - c.position[1];
+                    const dz = (ground(tx, ty) + target[2]) - c.position[2];
                     c.yaw = Math.atan2(dy, dx);
                     c.pitch = Math.atan2(dz, Math.hypot(dx, dy));
-                }""", [list(eye), list(target), lo, centre])
+                }""", [list(eye), list(target), centre])
                 page.wait_for_timeout(700)
                 path = out / f"{theme}-{name}.png"
                 page.screenshot(path=str(path))

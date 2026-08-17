@@ -254,7 +254,7 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             assignment = footprint_stage.assign_patches(patches, footprint_rings)
             new_walls, programs = extrude_stage.build(
                 footprint_rings, assignment, patches, cloud, raster, dtm,
-                start_id=len(patches))
+                start_id=len(patches), attrs=footprint_attrs)
             patches.extend(new_walls)
             world.programs.extend(programs)
             params = sum(p.cost for p in programs)

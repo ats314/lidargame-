@@ -88,13 +88,48 @@ def roof_height(patches, group: list[int], cloud) -> float | None:
     return max(tops)
 
 
+#: US survey feet to metres. Denver publishes BLDG_HEIGH and GROUND_ELE in feet.
+FOOT = 0.3048
+
+
+def published_height(attrs, index: int) -> float | None:
+    """Building height in metres from the footprint layer, if it carries one.
+
+    Denver states this in integer US survey feet above the building's own lowest
+    ground point, which is why it is returned as a height rather than an
+    elevation: converting the elevation would drag in the NAVD88/geoid datum,
+    while a height rides on the DTM the compiler already trusts.
+
+    Caveat worth knowing: the outline is digitised at the eave, and for a
+    pitched roof the height is measured to the ridge. Extruding straight to it
+    runs a pitched building tall. Downtown stock is overwhelmingly flat-roofed
+    so this barely shows here; it will bite in residential tiles.
+    """
+    if not attrs or index >= len(attrs):
+        return None
+    value = attrs[index].get("height")
+    if value is None:
+        return None
+    try:
+        metres = float(value) * FOOT
+    except (TypeError, ValueError):
+        return None
+    # A zero height is a Foundation/Ruin record, not a building.
+    return metres if 2.0 < metres < 700.0 else None
+
+
 def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
-          min_height: float = 2.5, start_id: int = 0):
-    """Extrude every footprint that has a measured roof above it.
+          min_height: float = 2.5, start_id: int = 0, attrs=None):
+    """Extrude every footprint whose roof height is known, measured or published.
 
     Returns (walls, programs). The programs are the generative description
     the walls came out of -- a ring and two heights each -- kept so the
     envelope can be re-executed rather than only rendered.
+
+    A measured roof wins when there is one: it is in the compiler's own datum by
+    construction, and using it keeps the extrusion answerable to the returns.
+    The published height is the fallback, and it is what lets a footprint with
+    no roof returns at all become a building instead of nothing.
     """
     if not len(rings):
         return [], []
@@ -106,13 +141,20 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
 
     walls: list[PlanarPatch] = []
     programs = []
-    for f, group in by_footprint.items():
-        top = roof_height(patches, group, cloud)
-        if top is None:
-            continue
+    # Every footprint is a candidate, not only the ones a patch landed on.
+    for f in range(len(rings)):
+        group = by_footprint.get(f, [])
         ring = rings[f]
         centre = ring.mean(axis=0)[None, :]
         base = float(np.nan_to_num(raster.sample_bilinear(dtm, centre)[0]))
+
+        top = roof_height(patches, group, cloud) if group else None
+        source = "measured"
+        stated = published_height(attrs, f)
+        if top is None:
+            if stated is None:
+                continue
+            top, source = base + stated, "published"
         if top - base < min_height:
             continue
         new = walls_from_footprint(ring, base, top, start_id=start_id + len(walls))
@@ -120,9 +162,17 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
         # keeping them is what lets a wall lost to a crop or an occlusion be
         # regenerated instead of predicted.
         program = program_ir.extrusion(f"bldg.{f:04d}", ring, base, top,
-                                       roof="flat", source="footprint")
-        program.notes = (f"{len(new)} walls from {program.cost} parameters; "
-                         "roof form not inferred, so the envelope is a prism")
+                                       roof="flat", source=source)
+        agree = ""
+        if source == "measured" and stated is not None:
+            # Both numbers exist: report the disagreement rather than hiding it.
+            delta = (top - base) - stated
+            program.params["published_height"] = round(stated, 2)
+            program.params["height_delta"] = round(delta, 2)
+            agree = f"; published height differs by {delta:+.1f} m"
+        program.notes = (f"{len(new)} walls from {program.cost} parameters, "
+                         f"height {source}{agree}; roof form not inferred, so "
+                         "the envelope is a prism")
         for patch in new:
             patch.attrs["program"] = program.id
         programs.append(program)

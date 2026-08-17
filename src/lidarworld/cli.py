@@ -324,6 +324,9 @@ def _cmd_tiles(args) -> int:
     """What is on disk, and does it actually cover the area you want?"""
     from .data.tiles import TileIndex
 
+    if args.remote:
+        return _cmd_tiles_remote(args)
+
     index = TileIndex.build(args.root, use_cache=not args.reindex)
     if not len(index):
         print(f"no LAS/LAZ tiles under {args.root}")
@@ -353,6 +356,47 @@ def _cmd_tiles(args) -> int:
               f"{tile.density:6.2f}/m2  at {tile.minx:.0f},{tile.miny:.0f}")
     if len(tiles) > args.limit:
         print(f"  ... {len(tiles) - args.limit} more")
+    return 0
+
+
+def _cmd_tiles_remote(args) -> int:
+    """Resolve an area of interest to download URLs, before fetching anything.
+
+    The local index reads headers off files you already have, which cannot tell
+    you what to download. The published per-tile extents can.
+    """
+    from .data.catalog_index import ACQUISITIONS, LICENSE, RemoteIndex
+
+    if not args.area:
+        print("published acquisitions:")
+        for name, entry in ACQUISITIONS.items():
+            print(f"  {name:20s} {entry['tiles']:>6,} tiles  {entry['project']}")
+            if entry.get("notes"):
+                print(f"  {'':20s} {entry['notes']}")
+        print(f"\nlicence: {LICENSE}")
+        print("\nPass --area lon,lat,size_deg to resolve an area to tile URLs.")
+        return 0
+
+    parts = [float(v) for v in args.area.split(",")]
+    if len(parts) != 3:
+        raise SystemExit("--remote --area takes lon,lat,size in DEGREES "
+                         "(the published extents are WGS84), e.g. "
+                         "--area -104.9935,39.7475,0.017")
+    lon, lat, size = parts
+    names = [args.acquisition] if args.acquisition else list(ACQUISITIONS)
+    index = RemoteIndex.load_all(names, cache_dir=args.root)
+    print(f"{len(index):,} tiles indexed from {len(names)} acquisition(s)")
+
+    hits = index.around(lon, lat, size)
+    if not hits:
+        print(f"no tile covers {lon},{lat}. The index spans "
+              f"{[round(v, 3) for v in index.summary()['bounds']]}")
+        return 1
+    print(f"\n{len(hits)} tile(s) cover it:")
+    for tile in hits:
+        print(f"  {tile.id:14s} {tile.acquisition}  flown {tile.start}-{tile.end}")
+        print(f"    {tile.url}")
+    print(f"\ncurl -O {hits[0].url}")
     return 0
 
 
@@ -470,6 +514,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="x,y,size in the source CRS: report which tiles cover it")
     ti.add_argument("--limit", type=int, default=20)
     ti.add_argument("--reindex", action="store_true", help="ignore the cached index")
+    ti.add_argument("--remote", action="store_true",
+                    help="index the published acquisition extents instead of local "
+                         "files, so an area resolves to download URLs. With --remote, "
+                         "--area is lon,lat,size in degrees.")
+    ti.add_argument("--acquisition", default=None,
+                    help="limit --remote to one acquisition (see --remote with no --area)")
     ti.set_defaults(func=_cmd_tiles)
 
     a = sub.add_parser("adapters", help="list ingest adapters")
