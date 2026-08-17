@@ -122,3 +122,40 @@ automate around. See `vienna.KAPPAZUNDER_ORDER`.
 Until it lands, Phase 0 cannot start and neither can Gate 1 — which means the
 one capability the whole testbed change rests on is untested. Everything else
 here is preparation.
+
+---
+
+## Candidate replacement: Amsterdam
+
+Vienna's blocker is narrow — the mobile mapping needs a request form — so the
+selection criterion is narrow too: **street-level imagery with published pose,
+downloadable without a form.** Probed 2026-08-17.
+
+**Amsterdam clears it.** `api.data.amsterdam.nl/panorama` is open, unauthenticated
+and returns **8,109,172 panoramas**, each with `heading`, `pitch` and `roll`,
+and image URLs that resolve directly on `t1.data.amsterdam.nl` in
+equirectangular and cubic form. That is the capability the Vienna move was made
+for, available immediately instead of behind a form.
+
+The wider Dutch stack is strong for the same reasons Vienna was: AHN national
+LiDAR, and 3D BAG as authoritative building models to hold out. `api.3dbag.nl`
+responded to an unauthenticated request.
+
+**Not yet verified, and not to be assumed:**
+
+- Panorama **position** came back null in the list view. Heading/pitch/roll are
+  present but a pose without a position is useless for projection, so the
+  detail endpoint has to be checked before anything is built on this.
+- AHN density and download route over an Amsterdam AOI.
+- 3D BAG field structure — the response parsed but the sampled feature exposed
+  no properties through the query used.
+- Whether the panorama frames are calibrated **measuring** images with an inner
+  orientation, or only georeferenced with an exterior heading. Vienna publishes
+  inner *and* outer orientation; if Amsterdam publishes only the latter, Gate 1
+  needs a pose refinement step against LiDAR rather than a direct projection.
+
+That last point is the one that decides whether Amsterdam is genuinely
+equivalent or merely close, and it should be settled before any acquisition.
+
+Denmark remains the other candidate: nationwide LiDAR, GeoDanmark and
+nationwide four-way obliques. Its street-level position is unprobed.
