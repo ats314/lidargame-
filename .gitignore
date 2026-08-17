@@ -1,6 +1,9 @@
 # Generated data and builds
 /data/samples/
 /data/real/
+# Fetched GIS bundles: the payload is downloadable, the manifest is the record.
+/data/*/*.geojson
+!/data/*/manifest.json
 *.laz
 *.las
 *.part
