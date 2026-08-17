@@ -125,6 +125,44 @@ def triangulate(ring: np.ndarray) -> np.ndarray:
     return np.asarray(out, dtype=np.int32) if out else np.zeros((0, 3), dtype=np.int32)
 
 
+#: Above this |normal.z| a surface is treated as a roof or floor rather than a
+#: wall, which decides whether its in-plane frame is anchored to world up.
+HORIZONTAL_NZ = 0.7
+
+
+def wall_frame(ring: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A surface's own (u, v, normal) axes in metres, oriented for masonry.
+
+    Lives here rather than in a backend because it is polygon geometry and two
+    unrelated consumers need the same answer: the glTF exporter writing metric
+    UV1, and the rectifier producing a front-facing facade crop. If those two
+    disagreed about which way is up, a detection made in the crop would be
+    placed on the wall rotated.
+
+    Brick courses, stone courses and siding are directional -- they run along
+    the wall and stack toward the sky -- so a wall's v axis is world up and its
+    u axis runs horizontally along the face. Horizontal surfaces have no
+    meaningful in-plane "up" and fall back to a stable world-referenced frame,
+    arbitrary but consistent between adjacent roof planes, which is what stops a
+    tiling seam at every ridge.
+    """
+    normal = newell(ring)
+    length = float(np.linalg.norm(normal))
+    normal = normal / length if length > 1e-12 else np.array([0.0, 0.0, 1.0])
+    up = np.array([0.0, 0.0, 1.0])
+    if abs(normal[2]) < HORIZONTAL_NZ:
+        u = np.cross(up, normal)
+        u /= np.linalg.norm(u)
+        v = up
+    else:
+        u = np.cross(normal, np.array([0.0, 1.0, 0.0]))
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(normal, np.array([1.0, 0.0, 0.0]))
+        u /= np.linalg.norm(u)
+        v = np.cross(normal, u)
+    return u, v, normal
+
+
 def close_ring(ring: np.ndarray) -> np.ndarray:
     """Drop a repeated final vertex, which GML always has and clipping cannot use."""
     if len(ring) > 1 and np.allclose(ring[0], ring[-1]):
