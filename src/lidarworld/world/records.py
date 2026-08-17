@@ -80,8 +80,26 @@ def _hash(params: dict) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+def _jsonable(value):
+    """Tuples become lists.
+
+    `to_dict()` output is validated against the schema directly, not after a
+    round trip through json.dumps, and a JSON Schema `array` does not accept a
+    Python tuple. Relying on the dump to fix it means the in-memory record and
+    the file disagree about whether they are valid.
+    """
+    if isinstance(value, tuple):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    return value
+
+
 def _clean(record: dict) -> dict:
-    return {k: v for k, v in record.items() if v not in (None, [], {}, "")}
+    return {k: _jsonable(v) for k, v in record.items()
+            if v not in (None, [], {}, "")}
 
 
 @dataclass

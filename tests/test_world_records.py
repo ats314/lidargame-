@@ -129,3 +129,14 @@ def test_the_proof_reports_the_weakest_step_not_the_strongest():
     assert proof["epistemic_state"] == "generated"
     assert proof["method"] == "tier_7_procedural_generation"
     assert proof["operations"] == 2
+
+
+def test_records_serialise_to_json_native_types():
+    """to_dict() is validated against the schema directly, not after a round
+    trip through json.dumps, and a JSON Schema `array` does not accept a
+    Python tuple."""
+    import json
+    gap = GapRecord(id="g", gap_type="occlusion", bounds=(1.0, 2.0, 3.0, 4.0))
+    payload = gap.to_dict()
+    assert isinstance(payload["bounds"], list)
+    assert json.loads(json.dumps(payload))["bounds"] == [1.0, 2.0, 3.0, 4.0]

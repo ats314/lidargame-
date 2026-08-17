@@ -39,6 +39,7 @@ from .segment import planes as plane_stage
 from .semantics import infer as semantic_stage
 from .topology import footprints as footprint_stage
 from .topology import graph as topology_stage
+from .world import gaps as gaps_stage
 from .types import (SEMANTIC_CLASSES, Geometry, Node, PointCloud, World)
 
 
@@ -376,6 +377,21 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             _log(config, f"street network promoted {info['promoted']:,} terrain cells "
                          f"to carriageway ({info['road_cells_before']:,} -> "
                          f"{info['road_cells_after']:,})")
+        # Classify the absences before anything is allowed to fill them. The
+        # footprints are a declared semantic region, so a hole under one is a
+        # roof the sensor missed rather than a void; a hole under nothing is a
+        # courtyard, and filling it would manufacture surface.
+        gap_regions = {"building": footprint_rings} if footprint_rings else {}
+        found = gaps_stage.classify(coverage, raster, regions=gap_regions,
+                                    log=world.repairs)
+        if found:
+            summary = gaps_stage.summarise(found)
+            rec.params["gaps"] = summary
+            _log(config, f"{summary['gaps']} gaps classified: "
+                         + ", ".join(f"{k} {v['count']}"
+                                     for k, v in summary["by_type"].items())
+                         + f" ({summary['refused']} refused as unfillable)")
+
         dtm = terrain_stage.smooth_terrain(dtm, class_raster)
         street = topology_stage.mark_street_facing(
             patches, lattices, raster, terrain_stage.road_mask(class_raster))
