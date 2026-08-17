@@ -369,19 +369,44 @@ def street_views(positions: np.ndarray, standoffs=PEDESTRIAN_STANDOFFS) -> dict:
     open_ij = np.argwhere(open_cell)
     nearest_m = distance[open_cell]
 
+    def corridor(oi: int, oj: int) -> tuple[np.ndarray, float]:
+        """The compass direction with the most open space ahead of it.
+
+        Aiming at the *nearest wall* was the obvious choice and it is wrong: it
+        puts the camera's nose flat against masonry, and every frame came back a
+        dark close-up. A pedestrian looks along the street, so the useful
+        direction is the one with the longest unobstructed run -- which in a
+        city block is the street axis, and it puts a facade down each side of
+        the frame where a person would see them.
+        """
+        best_dir, best_run = np.array([1.0, 0.0]), 0.0
+        for angle in np.linspace(0.0, 2 * np.pi, 36, endpoint=False):
+            step = np.array([np.cos(angle), np.sin(angle)])
+            run = 0.0
+            for k in range(1, 120):
+                pi = int(round(oi + step[0] * k))
+                pj = int(round(oj + step[1] * k))
+                if not (0 <= pi < open_cell.shape[0] and 0 <= pj < open_cell.shape[1]):
+                    break
+                if not open_cell[pi, pj]:
+                    break
+                run = k * cell
+            if run > best_run:
+                best_run, best_dir = run, step
+        return best_dir, best_run
+
     for standoff in standoffs:
         slot = int(np.argmin(np.abs(nearest_m - standoff)))
         achieved = float(nearest_m[slot])
         oi, oj = open_ij[slot]
-        wi, wj = int(indices[0, oi, oj]), int(indices[1, oi, oj])
         ground = float(low[oi, oj])
         eye = np.array([origin[0] + (oi + 0.5) * cell, ground + EYE_HEIGHT_M,
                         origin[1] + (oj + 0.5) * cell])
-        # Aim a little above eye level so a tall facade fills the frame rather
-        # than the pavement doing it.
-        target = np.array([origin[0] + (wi + 0.5) * cell,
-                           ground + EYE_HEIGHT_M + max(1.0, achieved * 0.35),
-                           origin[1] + (wj + 0.5) * cell])
+        step, run = corridor(int(oi), int(oj))
+        ahead = max(run, 12.0)
+        target = np.array([eye[0] + step[0] * ahead,
+                           ground + EYE_HEIGHT_M + ahead * 0.12,
+                           eye[2] + step[1] * ahead])
         views[f"{standoff:g}m"] = (eye, target, achieved)
     return views
 

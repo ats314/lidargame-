@@ -206,6 +206,53 @@ def merge(meshes: list[Mesh]) -> Mesh:
     return Mesh(np.vstack(positions), np.vstack(uvs), groups)
 
 
+#: A triangle bigger than this in a 250 m photogrammetric subtile is not a
+#: surface. It is webbing -- a bridge the reconstruction threw across a street,
+#: a courtyard or the sky because it could not tell that the gap was real.
+#:
+#: They are textured like everything else, which is why they are not obvious in
+#: the data: the material has an image, and the triangle simply stretches a few
+#: texels across hundreds of square metres. In a render that reads as a flat
+#: grey membrane hanging over the street. Measured on the historic core, 60% of
+#: all surface area sits in triangles over 5 m2.
+WEBBING_MAX_AREA_M2 = 5.0
+
+
+def triangle_areas(mesh: Mesh, faces: np.ndarray) -> np.ndarray:
+    a, b, c = (mesh.positions[faces[:, i]] for i in range(3))
+    return np.linalg.norm(np.cross(b - a, c - a), axis=1) / 2.0
+
+
+def drop_webbing(mesh: Mesh, max_area: float = WEBBING_MAX_AREA_M2) -> tuple[Mesh, dict]:
+    """Remove reconstruction bridges. Returns the mesh and what was removed.
+
+    Deleting them leaves holes, and the holes are correct: the gap it bridged
+    was a street, a courtyard or open sky. A hole reads as missing data, which
+    is true; a membrane reads as a wall that is not there, which is worse.
+    """
+    kept, dropped, kept_area, dropped_area = [], 0, 0.0, 0.0
+    for group in mesh.groups:
+        faces = np.asarray(group.faces).reshape(-1, 3)
+        if not len(faces):
+            continue
+        areas = triangle_areas(mesh, faces)
+        good = areas <= max_area
+        dropped += int((~good).sum())
+        dropped_area += float(areas[~good].sum())
+        kept_area += float(areas[good].sum())
+        if good.any():
+            kept.append(Group(group.material, group.image, faces[good]))
+    report = {
+        "dropped_triangles": dropped,
+        "dropped_area_m2": round(dropped_area, 1),
+        "kept_area_m2": round(kept_area, 1),
+        "dropped_area_fraction": round(dropped_area / (dropped_area + kept_area), 3)
+        if (dropped_area + kept_area) else 0.0,
+        "max_area_m2": max_area,
+    }
+    return Mesh(mesh.positions, mesh.uvs, kept, mesh.source), report
+
+
 def crop(mesh: Mesh, lo, hi) -> Mesh:
     """Triangles whose centroid is inside the XY box [lo, hi].
 

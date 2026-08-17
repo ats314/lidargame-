@@ -171,3 +171,53 @@ def test_bounds_are_local_and_reported_as_read(tmp_path):
     lo, hi = mesh.bounds
     assert np.allclose(lo, [0, 0, 0])
     assert np.allclose(hi, [1, 0, 1])
+
+
+def webbed(tmp_path):
+    """Two ordinary triangles and one bridge thrown across a street."""
+    obj = """\
+v 0 0 0
+v 1 0 0
+v 1 0 1
+v 0 0 1
+v 60 0 0
+v 60 0 30
+usemtl m
+f 1 2 3
+f 1 3 4
+f 1 5 6
+"""
+    (tmp_path / "m.obj").write_text(obj)
+    return objmesh.read_obj(tmp_path / "m.obj")
+
+
+def test_webbing_is_dropped_and_reported(tmp_path):
+    """A bridge is textured like everything else, so nothing flags it but area.
+
+    Measured on the Helsinki historic core: 3.5% of triangles carried 60% of all
+    surface area, and in a render they are flat grey membranes over the street.
+    """
+    mesh = webbed(tmp_path)
+    clean, report = objmesh.drop_webbing(mesh)
+    assert mesh.triangles == 3
+    assert clean.triangles == 2
+    assert report["dropped_triangles"] == 1
+    assert report["dropped_area_fraction"] > 0.9
+    assert report["kept_area_m2"] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_dropping_webbing_leaves_a_hole_rather_than_a_wall(tmp_path):
+    """The gap it bridged was a street. A hole is true; a membrane is not."""
+    mesh = webbed(tmp_path)
+    clean, _ = objmesh.drop_webbing(mesh)
+    remaining = np.vstack([np.asarray(g.faces).reshape(-1, 3) for g in clean.groups])
+    # No surviving triangle may reach the far side of the street.
+    assert clean.positions[remaining].reshape(-1, 3)[:, 0].max() <= 1.0
+
+
+def test_a_generous_threshold_keeps_everything(tmp_path):
+    mesh = webbed(tmp_path)
+    clean, report = objmesh.drop_webbing(mesh, max_area=10_000.0)
+    assert clean.triangles == mesh.triangles
+    assert report["dropped_triangles"] == 0
+    assert report["dropped_area_fraction"] == 0.0
