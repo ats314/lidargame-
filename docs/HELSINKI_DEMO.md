@@ -66,6 +66,18 @@ Helsinki's semantic model carries 2,980 buildings, 34,260 wall surfaces and
 absent. The reality mesh is the only source of facade depth in open data, which
 is the strongest single argument for Helsinki.
 
+## Street width is a real constraint
+
+The demo cameras stand in open ground and look along the street. In the historic
+core the **furthest any pedestrian position gets from a building is 15 m** — the
+streets are 15 m wide. The 20 m and 50 m standoffs in the distance series both
+clamp to it.
+
+That is not a defect in the data, it is Helsinki. It also means the canyon view
+already contains the whole distance series: looking down the street puts facades
+at 1 m, 5 m, 20 m and 50 m in one frame, which is a fairer test of a material
+system than four separate shots.
+
 ## Webbing, reported rather than hidden
 
 A photogrammetric mesh bridges gaps it should leave open — long near-vertical
