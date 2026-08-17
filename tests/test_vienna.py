@@ -52,12 +52,22 @@ def test_the_facade_capability_is_recorded_with_its_reason():
     assert vienna.OBLIQUE["epochs"] == ("2020", "2023")
 
 
-def test_the_ordering_route_is_recorded_because_it_blocks_acquisition():
-    """Kappazunder is requested, not downloaded. That is a human action in
-    someone's name, so it has to be visible rather than discovered when an
-    automated fetch quietly fails."""
+def test_the_test_datasets_are_directly_downloadable():
+    """An earlier note recorded Kappazunder as blocked behind a request form.
+    That was read off the product page and was wrong: the test datasets are on
+    data.gv.at under CC BY 4.0 with direct URLs. The form is for arbitrary
+    areas, not for getting started."""
+    urls = vienna.test_dataset_urls()
+    assert set(urls) == {"info", "gis", "kappazunder"}
+    for url in urls.values():
+        assert url.startswith("https://www.wien.gv.at/ma41datenviewer/")
+        assert url.endswith(".zip")
+    assert vienna.TEST_LICENSE == "CC BY 4.0"
+
+
+def test_the_ordering_route_still_distinguishes_the_two_paths():
     order = vienna.KAPPAZUNDER_ORDER
-    assert "not a direct download" in order["route"]
+    assert "Test datasets: direct download" in order["route"]
     assert order["product_page"].startswith("https://www.wien.gv.at/")
     # The capability the whole move depends on, stated where it can be checked.
     assert "orientation" in order["metadata"]

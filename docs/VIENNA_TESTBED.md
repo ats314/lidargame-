@@ -108,28 +108,31 @@ elaborate wrong model is a failure.
 | party walls | represented once, referenced twice |
 | appearance | every material names its evidence or is marked generated |
 
-## Acquisition status — blocked, and by what
+## Acquisition status
 
 `data/vienna.py` records eight WFS layers, all probed live and returning
 features over the historic core. Those are fetchable now.
 
-**The mobile mapping is not.** Kappazunder is obtained by submitting a request
-form to the City, not by direct download, and the 5.5 GB test dataset is not
-linked from the product page. That is an outward-facing request in a named
-person's identity, so it is the owner's action to take, not something to
-automate around. See `vienna.KAPPAZUNDER_ORDER`.
+**The mobile mapping is fetchable too.** An earlier version of this section said
+Kappazunder could only be obtained by submitting a request form, and called that
+a blocker that stopped Phase 0. That was read off the product page and was
+wrong. The test datasets are published on data.gv.at under CC BY 4.0 with direct
+download URLs — DCAT record `ed24cfff-1361-48d5-a071-31e4c697b844`, mirrored in
+`vienna.TEST_DATASETS`. The form route exists for arbitrary areas of the city;
+it was never the only route.
 
-Until it lands, Phase 0 cannot start and neither can Gate 1 — which means the
-one capability the whole testbed change rests on is untested. Everything else
-here is preparation.
+Recording the error rather than quietly fixing it, because the failure mode is
+the recurring one in this repo: asserting from a page instead of querying the
+catalogue. The cost was real — it is what put Amsterdam below into the document
+as a "replacement" for a blocker that did not exist.
 
 ---
 
-## Candidate replacement: Amsterdam
+## Candidate: Amsterdam
 
-Vienna's blocker is narrow — the mobile mapping needs a request form — so the
-selection criterion is narrow too: **street-level imagery with published pose,
-downloadable without a form.** Probed 2026-08-17.
+Kept because the comparison is still worth having, not because Vienna is
+blocked. The criterion: **street-level imagery with published pose, downloadable
+without a form.** Probed 2026-08-17.
 
 **Amsterdam clears it.** `api.data.amsterdam.nl/panorama` is open, unauthenticated
 and returns **8,109,172 panoramas**, each with `heading`, `pitch` and `roll`,

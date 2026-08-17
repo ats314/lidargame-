@@ -179,16 +179,18 @@ LAYERS: dict[str, Layer] = {layer.id: layer for layer in [
 #: place to start rather than requesting the city.
 #: Confirmed from the product page on 2026-08-17, not inferred.
 #:
-#: IMPORTANT, and the reason this cannot simply be fetched: the 2020 data is
-#: obtained by submitting a request form to the City, not by direct download.
-#: That is an outward-facing action in someone's name and is the owner's to
-#: take, so acquisition stops here until it is. The published test area is the
-#: exception and is the right thing to start on.
+#: CORRECTED 2026-08-17. An earlier note here said Kappazunder could only be
+#: obtained by submitting a request form, and recorded that as a blocker. That
+#: was read off the product page and was wrong. The test datasets are published
+#: on data.gv.at under CC BY 4.0 with direct download URLs and no form at all --
+#: see TEST_DATASETS below. The form route exists for arbitrary areas of the
+#: city; it is not the only route, and it never blocked getting started.
 KAPPAZUNDER_ORDER = {
     "product_page": ("https://www.wien.gv.at/stadtplanung/"
                      "mobile-mapping-befahrungsdaten-produktinformation"),
     "interface_spec_en": "https://www.wien.gv.at/pdf/ma41/datainterface-kappazunder-en.pdf",
-    "route": "request form on wien.gv.at formularserver; not a direct download",
+    "route": "arbitrary areas: request form on wien.gv.at formularserver. "
+             "Test datasets: direct download, no form (see TEST_DATASETS).",
     "acquired": "driven from May 2020",
     "coverage": "the whole Vienna street network, plus the Donauinsel, "
                 "selected parks and the urban motorways",
@@ -241,3 +243,31 @@ def withheld() -> list[Layer]:
     because it would make the output better.
     """
     return [layer for layer in LAYERS.values() if layer.role == "hidden_truth"]
+
+
+#: Directly downloadable, CC BY 4.0, no request form. Found via the data.gv.at
+#: DCAT record ed24cfff-1361-48d5-a071-31e4c697b844, which carries the URLs the
+#: product page does not.
+#:
+#: This is the 2023 epoch rather than the 2020 one the handoff prefers. 2020 is
+#: the temporally coherent stack -- 2020 mobile, 2020 obliques, 2020 ortho --
+#: and remains the right target for a scored run. But 2023 is the same
+#: interface, it is here now, and Phase 0 is an intake audit: reading the
+#: structure does not need the epoch to match anything.
+TEST_BASE = "https://www.wien.gv.at/ma41datenviewer/downloads/Wien/Testdaten"
+TEST_DATASETS = {
+    "info": {"file": "01-Info_2023.zip", "bytes": 3_558_148,
+             "note": "documentation; read before assuming the archive layout"},
+    "gis": {"file": "02-GIS-Daten_2023.zip", "bytes": 39_600,
+            "note": "the AOI's vector context"},
+    "kappazunder": {"file": "03_Kappazunder_Testdatensatz_2023.zip",
+                    "note": "the mobile mapping itself -- LAZ, panoramas, "
+                            "trajectory, and the orientation metadata that "
+                            "makes projection arithmetic rather than a fit"},
+}
+TEST_LICENSE = "CC BY 4.0"
+
+
+def test_dataset_urls() -> dict[str, str]:
+    return {key: f"{TEST_BASE}/{spec['file']}"
+            for key, spec in TEST_DATASETS.items()}
