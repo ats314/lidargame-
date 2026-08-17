@@ -283,6 +283,166 @@ def export(faces: list[Face], out_path: str | Path, *,
             "surfaces": len(surfaces), "surface_index": str(index_path)}
 
 
+def export_mesh(positions: np.ndarray, uvs: np.ndarray,
+                groups: list, out_path: str | Path, *,
+                origin: np.ndarray | None = None, y_up: bool = True,
+                max_texture_px: int | None = None) -> dict:
+    """Write an already-triangulated mesh with per-group textures to .glb.
+
+    `export` above takes polygons and tessellates them, which is right for
+    CityGML surfaces and wrong for a photogrammetric mesh: a Helsinki 250 m
+    subtile is millions of triangles that are already triangles, and routing
+    them through ear clipping would be slow and would achieve nothing.
+
+    `groups` is any sequence of objects with `.material`, `.image` and `.faces`
+    -- the shape `ingest.objmesh.Group` has. One glTF primitive is emitted per
+    group, so draw calls follow the texture count.
+
+    Same discipline as `export`: coordinates are recentred before the float32
+    cast, because these meshes are georeferenced and float32 cannot hold a
+    projected coordinate without quantising it.
+    """
+    from collections import OrderedDict
+
+    out_path = Path(out_path)
+    positions = np.asarray(positions, dtype=np.float64)
+    if origin is None:
+        origin = ((positions.min(axis=0) + positions.max(axis=0)) / 2.0
+                  if len(positions) else np.zeros(3))
+    origin = np.asarray(origin, dtype=float)
+
+    local = positions - origin
+    if y_up:
+        local = np.column_stack([local[:, 0], local[:, 2], -local[:, 1]])
+    local = local.astype(np.float32)
+    uvs = np.asarray(uvs, dtype=np.float32)
+    if len(uvs) != len(positions):
+        uvs = np.zeros((len(positions), 2), dtype=np.float32)
+    # OBJ's v runs up from the bottom-left; glTF's runs down from the top-left.
+    flipped = np.column_stack([uvs[:, 0], 1.0 - uvs[:, 1]]).astype(np.float32)
+
+    buffer = bytearray()
+    views: list[dict] = []
+    accessors: list[dict] = []
+
+    def add_view(data: bytes) -> int:
+        _pad(buffer)
+        offset = len(buffer)
+        buffer.extend(data)
+        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(data)})
+        return len(views) - 1
+
+    def add_accessor(data: np.ndarray, kind: str, component: int) -> int:
+        view = add_view(data.tobytes())
+        spec = {"bufferView": view, "componentType": component,
+                "count": int(len(data)), "type": kind}
+        if kind in ("VEC3", "VEC2"):
+            spec["min"] = data.min(axis=0).tolist()
+            spec["max"] = data.max(axis=0).tolist()
+        else:
+            spec["min"] = [int(data.min())] if len(data) else [0]
+            spec["max"] = [int(data.max())] if len(data) else [0]
+        accessors.append(spec)
+        return len(accessors) - 1
+
+    position_accessor = add_accessor(local, "VEC3", 5126)
+    uv_accessor = add_accessor(flipped, "VEC2", 5126)
+
+    images: list[dict] = []
+    textures: list[dict] = []
+    materials: list[dict] = []
+    primitives: list[dict] = []
+    image_slot: "OrderedDict[str, int]" = OrderedDict()
+    embedded_bytes = 0
+
+    for group in groups:
+        faces = np.asarray(group.faces, dtype=np.uint32).reshape(-1)
+        if not len(faces):
+            continue
+        primitive = {"attributes": {"POSITION": position_accessor,
+                                    "TEXCOORD_0": uv_accessor},
+                     "indices": add_accessor(faces, "SCALAR", 5125),
+                     "material": len(materials)}
+        if group.image is not None:
+            key = str(group.image)
+            if key not in image_slot:
+                payload = Path(group.image).read_bytes()
+                mime = "image/png" if key.lower().endswith(".png") else "image/jpeg"
+                if max_texture_px:
+                    payload, mime = _downscale(payload, max_texture_px, mime)
+                images.append({"bufferView": add_view(payload), "mimeType": mime})
+                textures.append({"source": len(images) - 1, "sampler": 0})
+                image_slot[key] = len(textures) - 1
+                embedded_bytes += len(payload)
+            materials.append({
+                "name": group.material,
+                "pbrMetallicRoughness": {
+                    "baseColorTexture": {"index": image_slot[key]},
+                    "metallicFactor": 0.0, "roughnessFactor": 0.95},
+                "doubleSided": True})
+        else:
+            materials.append({
+                "name": group.material or "untextured",
+                "pbrMetallicRoughness": {
+                    "baseColorFactor": list(FALLBACK[""]),
+                    "metallicFactor": 0.0, "roughnessFactor": 0.95},
+                "doubleSided": True})
+        primitives.append(primitive)
+
+    _pad(buffer)
+    gltf = {
+        "asset": {"version": "2.0", "generator": "lidarworld gltf_textured mesh"},
+        "scene": 0, "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0, "name": "mesh",
+                   "extras": {"geoOrigin": origin.tolist()}}],
+        "meshes": [{"primitives": primitives}],
+        "buffers": [{"byteLength": len(buffer)}],
+        "bufferViews": views, "accessors": accessors, "materials": materials,
+    }
+    if textures:
+        gltf["textures"] = textures
+        gltf["images"] = images
+        gltf["samplers"] = [{"magFilter": LINEAR,
+                             "minFilter": LINEAR_MIPMAP_LINEAR,
+                             "wrapS": REPEAT, "wrapT": REPEAT}]
+
+    payload = json.dumps(gltf, separators=(",", ":")).encode()
+    payload += b" " * ((4 - len(payload) % 4) % 4)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "wb") as handle:
+        handle.write(struct.pack("<III", 0x46546C67, 2,
+                                 12 + 8 + len(payload) + 8 + len(buffer)))
+        handle.write(struct.pack("<II", len(payload), 0x4E4F534A))
+        handle.write(payload)
+        handle.write(struct.pack("<II", len(buffer), 0x004E4942))
+        handle.write(bytes(buffer))
+
+    return {"path": str(out_path), "bytes": out_path.stat().st_size,
+            "vertices": int(len(local)),
+            "triangles": int(sum(len(np.asarray(g.faces).reshape(-1, 3))
+                                 for g in groups)),
+            "primitives": len(primitives), "textures": len(textures),
+            "texture_bytes": embedded_bytes, "origin": origin.tolist()}
+
+
+def _downscale(payload: bytes, max_px: int, mime: str) -> tuple[bytes, str]:
+    """Shrink an embedded texture, for when a tile's images dwarf its geometry."""
+    import io as _io
+
+    from PIL import Image
+
+    image = Image.open(_io.BytesIO(payload))
+    if max(image.size) <= max_px:
+        return payload, mime
+    scale = max_px / max(image.size)
+    image = image.convert("RGB").resize(
+        (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+        Image.LANCZOS)
+    out = _io.BytesIO()
+    image.save(out, format="JPEG", quality=88)
+    return out.getvalue(), "image/jpeg"
+
+
 def data_uri(path: str | Path) -> str:
     """A .glb as a data: URI, for dropping into a self-contained page."""
     raw = Path(path).read_bytes()

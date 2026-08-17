@@ -52,3 +52,9 @@ probe.mjs
 # daten-hamburg.de, so reproducible rather than vendored. One inner-city tile is
 # 199 MB. URLs and per-tile extraction in data/hamburg.py.
 /data/hamburg/
+
+# Helsinki 3D+ mesh and semantic model: CC BY 4.0 and directly downloadable
+# from 3d.hel.ninja, so reproducible rather than vendored. The whole reality
+# mesh is 190 GB over 122 tiles; the nine central tiles are 13.3 GB and one
+# unpacks to thousands of OBJ/MTL/JPEG files. URLs in data/helsinki.py.
+/data/helsinki/

@@ -213,3 +213,65 @@ def test_the_surface_index_locates_a_wall_in_three_dimensions(tmp_path):
     assert entry["width_m"] == pytest.approx(6.0, abs=1e-3)
     assert entry["height_m"] == pytest.approx(9.0, abs=1e-3)
     assert entry["v_axis"] == [0.0, 0.0, 1.0]
+
+
+def _group(material, image, faces):
+    from lidarworld.ingest.objmesh import Group
+    return Group(material=material, image=image, faces=np.asarray(faces))
+
+
+def test_a_triangulated_mesh_exports_without_going_through_ear_clipping(tmp_path):
+    """A photogrammetric tile is millions of triangles that already are triangles."""
+    from lidarworld.backends.gltf_textured import export_mesh
+    positions = np.array([[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], dtype=float)
+    uvs = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+    out = tmp_path / "mesh.glb"
+    result = export_mesh(positions, uvs, [_group("m", None, [[0, 1, 2], [0, 2, 3]])],
+                         out, origin=np.zeros(3))
+    assert result["triangles"] == 2
+    assert result["vertices"] == 4
+    gltf, _ = read_back(out)
+    assert len(gltf["meshes"][0]["primitives"]) == 1
+
+
+def test_mesh_export_recentres_before_the_float32_cast(tmp_path):
+    """Helsinki eastings are 25,497,363 - float32 there resolves about 2 m."""
+    from lidarworld.backends.gltf_textured import export_mesh
+    far = np.array([[0, 0, 0], [1, 0, 0], [1, 0, 1]], dtype=float) + \
+        np.array([25_497_363.0, 6_672_958.0, 0.0])
+    out = tmp_path / "far.glb"
+    result = export_mesh(far, np.zeros((3, 2), np.float32),
+                         [_group("m", None, [[0, 1, 2]])], out)
+    gltf, _ = read_back(out)
+    assert np.all(np.abs(gltf["accessors"][0]["max"]) < 10)
+    assert result["origin"][0] == pytest.approx(25_497_363.5, abs=1e-2)
+
+
+def test_mesh_export_shares_one_texture_between_groups_that_use_it(tmp_path):
+    from lidarworld.backends.gltf_textured import export_mesh
+    image = tmp_path / "t.jpg"
+    image.write_bytes(jpeg_bytes())
+    positions = np.array([[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], dtype=float)
+    uvs = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32)
+    groups = [_group("a", image, [[0, 1, 2]]), _group("b", image, [[0, 2, 3]])]
+    result = export_mesh(positions, uvs, groups, tmp_path / "shared.glb",
+                         origin=np.zeros(3))
+    assert result["primitives"] == 2      # two material runs
+    assert result["textures"] == 1        # but one embedded image
+
+
+def test_mesh_export_flips_v_for_gltf(tmp_path):
+    """OBJ's v runs up from the bottom-left; glTF's runs down from the top-left."""
+    from lidarworld.backends.gltf_textured import export_mesh
+    positions = np.array([[0, 0, 0], [1, 0, 0], [1, 0, 1]], dtype=float)
+    uvs = np.array([[0, 0], [1, 0], [1, 1]], dtype=np.float32)
+    out = tmp_path / "flip.glb"
+    export_mesh(positions, uvs, [_group("m", None, [[0, 1, 2]])], out,
+                origin=np.zeros(3))
+    gltf, binary = read_back(out)
+    spec = gltf["accessors"][gltf["meshes"][0]["primitives"][0]
+                             ["attributes"]["TEXCOORD_0"]]
+    view = gltf["bufferViews"][spec["bufferView"]]
+    values = np.frombuffer(binary, dtype=np.float32, count=spec["count"] * 2,
+                           offset=view["byteOffset"]).reshape(-1, 2)
+    assert values[0].tolist() == [0.0, 1.0]

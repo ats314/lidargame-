@@ -168,9 +168,15 @@ def render(path: str | Path, *, eye, target, width=1280, height=720, fov=60.0,
                 source = gltf["textures"][pbr["baseColorTexture"]["index"]]["source"]
                 spec = gltf["images"][source]
                 if "bufferView" in spec:
-                    view = gltf["bufferViews"][spec["bufferView"]]
-                    start = view.get("byteOffset", 0)
-                    handle = io.BytesIO(binary[start: start + view["byteLength"]])
+                    # Named `image_view`, not `view`: `view` is the camera
+                    # matrix built once at the top of this function, and
+                    # shadowing it here replaced the whole view transform with
+                    # a bufferView dict the moment a texture was embedded in
+                    # the buffer -- which is every .glb `gltf_textured` writes.
+                    image_view = gltf["bufferViews"][spec["bufferView"]]
+                    start = image_view.get("byteOffset", 0)
+                    handle = io.BytesIO(
+                        binary[start: start + image_view["byteLength"]])
                 else:
                     # Themed exports keep their baked textures in a sidecar
                     # directory rather than in the buffer.
