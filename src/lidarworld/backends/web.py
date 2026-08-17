@@ -143,6 +143,9 @@ def export(world: World, out_dir: str | Path, *, themes: list[str] | None = None
         "sources": [s.to_json() for s in world.sources],
         "stages": [s.to_json() for s in world.stages],
         "summary": world.summary(),
+        # Promoted out of notes so the viewer can say, in its header, whether
+        # this world was measured or generated. Same triangles either way.
+        "generated_from": world.notes.get("generated_from"),
         "notes": world.notes,
     }
     (out_dir / "world.json").write_text(json.dumps(header, indent=1))

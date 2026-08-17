@@ -163,6 +163,32 @@ def _cmd_compile(args) -> int:
     return 0
 
 
+def _cmd_generate(args) -> int:
+    """Seed -> world. The other half of the compiler, and the one that makes a
+    place you can walk around in rather than a reconstruction you can measure."""
+    from .backends import web as web_backend
+    from .themes import compile_theme, load_pack
+    from .world import generate
+
+    seed = generate.load(args.seed)
+    print(f"expanding {args.seed}: {len(seed.get('buildings', []))} buildings, "
+          f"{len(seed.get('roads', []))} roads, "
+          f"{len(seed.get('vegetation', []))} trees")
+    world = generate.expand(seed, tile=args.tile)
+    out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+
+    theme_ids = args.theme or ["victorian"]
+    for theme_id in theme_ids:
+        pack = load_pack(theme_id)
+        compile_theme(pack, out / "themes" / pack.id, bake=not args.no_textures)
+    info = web_backend.export(world, out, themes=theme_ids, include_points=False)
+    origin = world.notes["generated_from"]
+    print(f"  world       {info['vertices']:,} verts, {info['triangles']:,} tris, "
+          f"{info['bytes'] / 1e6:.1f} MB")
+    print(f"  provenance  {origin['note']}")
+    return 0
+
+
 def _cmd_validate(args) -> int:
     """Forward validation: re-scan the reconstruction and score it."""
     import numpy as np
@@ -474,6 +500,16 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--no-points", action="store_true")
     c.add_argument("-q", "--quiet", action="store_true")
     c.set_defaults(func=_cmd_compile)
+
+    g = sub.add_parser("generate",
+                       help="World Seed -> walkable world, with no point cloud")
+    g.add_argument("seed", help="path to a .seed.json")
+    g.add_argument("-o", "--out", default="build/generated")
+    g.add_argument("-t", "--theme", action="append", default=None)
+    g.add_argument("--tile", type=float, default=0.5,
+                   help="surface tile size in metres for generated geometry")
+    g.add_argument("--no-textures", action="store_true")
+    g.set_defaults(func=_cmd_generate)
 
     v = sub.add_parser("validate",
                        help="re-simulate a scan against the reconstruction and score it")
