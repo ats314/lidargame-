@@ -110,23 +110,53 @@ def main() -> int:
             continue
         dna = elevation.measure(flat, grid, model.image, base_z=base_z,
                                 top_z=top_z, support=model.support > 0)
-        built = elevation.build(max(rings, key=len), dna)
+        built = elevation.build_detailed(max(rings, key=len), dna)
         if not len(built.quads):
             continue
-        colour = {"wall": dna.wall_rgb, "glass": dna.window_rgb,
-                  "reveal": tuple(0.82 * c for c in dna.wall_rgb)}
+        # Relief only reads if the surfaces that catch light differ from the
+        # ones that do not. These are shading offsets on the building's own
+        # measured colour, not a palette: a cornice is the same render as the
+        # wall, it is just in the light.
+        w = np.asarray(dna.wall_rgb, dtype=float)
+        colour = {
+            "wall": tuple(w),
+            "glass": tuple(np.asarray(dna.window_rgb) * 0.85),
+            "door": tuple(np.asarray(dna.window_rgb) * 0.7),
+            "reveal": tuple(w * 0.80),
+            "sill": tuple(np.clip(w * 1.12, 0, 1)),
+            "frame": tuple(np.clip(w * 1.20, 0, 1)),
+            "plinth": tuple(w * 0.74),
+            "string": tuple(np.clip(w * 1.06, 0, 1)),
+            "cornice": tuple(np.clip(w * 1.10, 0, 1)),
+            "roof": tuple(w * 0.42),
+        }
+        # Per-building kinds, so six buildings are not one colour. The exporter
+        # groups untextured faces by kind, so the kind name has to carry the
+        # building or every wall in the block shares a material.
         for quad, kind in zip(built.quads, built.kinds):
             faces.append(gltf_textured.Face(
-                ring=quad, kind=kind,
+                ring=quad, kind=f"{kind}@{slot}",
                 surface_id=f"b{slot}_{kind}", building_id=str(slot)))
         gltf_textured.FALLBACK.update(
-            {k: (*v, 1.0) for k, v in colour.items()})
+            {f"{k}@{slot}": (*v, 1.0) for k, v in colour.items()})
         records.append({"building": int(slot),
                         "gml_id": index.buildings[slot].gml_id,
                         **built.report})
         print(f"  built {slot}: {top_z - base_z:.1f} m, "
               f"{built.report['quads']} quads, "
               f"{built.report['openings']} openings", flush=True)
+
+    # Ground, so the block is standing on something rather than in space.
+    if faces:
+        pts = np.vstack([f.ring for f in faces])
+        pad = 22.0
+        lo2, hi2 = pts[:, :2].min(axis=0) - pad, pts[:, :2].max(axis=0) + pad
+        z = float(np.percentile(pts[:, 2], 1)) - 0.15
+        faces.append(gltf_textured.Face(
+            ring=np.array([[lo2[0], lo2[1], z], [hi2[0], lo2[1], z],
+                           [hi2[0], hi2[1], z], [lo2[0], hi2[1], z]]),
+            kind="ground", surface_id="ground"))
+        gltf_textured.FALLBACK["ground"] = (0.30, 0.30, 0.31, 1.0)
 
     if not faces:
         raise SystemExit("nothing was built")

@@ -238,17 +238,33 @@ def render(path: str | Path, *, eye, target, width=1280, height=720, fov=60.0,
                 win = near_enough & (z < sub)
                 if not win.any():
                     continue
+                # Flat Lambert from the face normal. Without it every surface
+                # returns its base colour and a building with cornices, reveals
+                # and projecting sills renders as a paper cut-out -- which is
+                # exactly what it did, and it made real relief invisible.
+                edge1 = position[face[1]] - position[face[0]]
+                edge2 = position[face[2]] - position[face[0]]
+                normal = np.cross(edge1, edge2)
+                length = np.linalg.norm(normal)
+                lambert = 1.0
+                if length > 1e-12:
+                    normal = normal / length
+                    lit = abs(float(normal @ LIGHT))
+                    lambert = AMBIENT + (1.0 - AMBIENT) * lit
                 if texture is not None:
                     tu = (l0 * uv[face[0], 0] / zw[0] + l1 * uv[face[1], 0] / zw[1]
                           + l2 * uv[face[2], 0] / zw[2]) * z
                     tv = (l0 * uv[face[0], 1] / zw[0] + l1 * uv[face[1], 1] / zw[1]
                           + l2 * uv[face[2], 1] / zw[2]) * z
                     th, tw = texture.shape[:2]
-                    ix = np.clip((tu[win] * tw).astype(int), 0, tw - 1)
-                    iy = np.clip((tv[win] * th).astype(int), 0, th - 1)
+                    # Wrap, do not clamp: a facade material tiles, and UV0 runs
+                    # to tens of repeats across a wall.
+                    ix = (tu[win] * tw).astype(int) % tw
+                    iy = (tv[win] * th).astype(int) % th
                     shade = texture[iy, ix]
                 else:
                     shade = np.broadcast_to(base, (int(win.sum()), 3))
+                shade = np.clip(shade * lambert, 0.0, 1.0)
                 sub[win] = z[win]
                 colour[y0:y1, x0:x1][win] = shade
 
@@ -284,6 +300,15 @@ def bounds(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
 #: model that looks superb at 50 m and melts at 1 m is a different product from
 #: one that is flat at every distance, and only a distance series separates them.
 PEDESTRIAN_STANDOFFS = (1.0, 5.0, 20.0, 50.0)
+#: A low sun, so a 15 cm reveal and a 40 cm cornice both throw a readable step.
+#: Normalised at import rather than per face.
+LIGHT = np.array([0.45, -0.75, 0.49])
+LIGHT = LIGHT / np.linalg.norm(LIGHT)
+
+#: Enough fill that a wall facing away is still legible, low enough that relief
+#: reads. A facade lit at ambient 0.9 is a flat cut-out with extra steps.
+AMBIENT = 0.42
+
 EYE_HEIGHT_M = 1.7
 
 

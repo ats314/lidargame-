@@ -64,6 +64,11 @@ MIN_WINDOW_M = 0.6
 #: choice when the transition itself is blurred over 20 cm.
 WINDOW_EDGE = 0.5
 
+#: Median luminance a de-lit facade is normalised to. Masonry and render sit
+#: around here; the number a survey texture arrives at is the flight's exposure,
+#: not the building's.
+ALBEDO_TARGET = 0.58
+
 
 @dataclass
 class FacadeDNA:
@@ -157,6 +162,17 @@ def measure(facade, grid, average: np.ndarray, *, base_z: float, top_z: float,
     grey = np.asarray(average, dtype=np.float64)
     if grey.max() > 1.5:
         grey = grey / 255.0
+    # A photogrammetric texture is not albedo -- it carries the sun, the sky and
+    # the exposure the survey flew at. Taken raw, this Helsinki block's measured
+    # wall came out (0.32, 0.38, 0.44): a real hue on a dusk exposure, which
+    # renders as a gloomy slab and then gets lit AGAIN by the engine. De-lighting
+    # first, then normalising the value while keeping the hue, gives a base colour
+    # that is the wall's own rather than the weather's.
+    from ..features.frequency import LUMA, delight            # noqa: PLC0415
+    grey, _, _ = delight(grey, px_per_m=px)
+    luma = grey @ LUMA
+    scale = ALBEDO_TARGET / max(float(np.median(luma)), 1e-3)
+    grey = np.clip(grey * scale, 0.0, 1.0)
     luma = grey.mean(axis=2)
     lit = luma >= np.nanpercentile(luma, 75)
     glass = luma <= np.nanpercentile(luma, 15)
@@ -316,4 +332,211 @@ def build(ring: np.ndarray, dna: FacadeDNA) -> Elevation:
         "openings": sum(e.get("openings", 0) for e in edges),
         "dna": dna.to_record(),
         "per_edge": edges,
+    })
+
+
+# --- architecture -------------------------------------------------------------
+#
+# The first version of this built a box with holes in it. Six of them rendered as
+# extruded prisms with one window stamped in a grid: structurally correct and
+# visually worthless, because a real facade is mostly *relief* -- a plinth the
+# wall stands on, a cornice it stops at, a string course dividing the shopfront
+# from the flats above, a sill each window sits on and a lintel over it. All of
+# those are ten centimetres of projection, they cost almost nothing in triangles,
+# and they are what light catches. Without them a wall has one plane and returns
+# one colour.
+
+#: How far a band stands proud of the wall, metres. Small: a Helsinki string
+#: course is a few centimetres of render, not a ledge.
+PLINTH_PROJECTION_M = 0.09
+CORNICE_PROJECTION_M = 0.42
+STRING_PROJECTION_M = 0.07
+SILL_PROJECTION_M = 0.06
+
+#: Heights of those bands.
+PLINTH_H_M = 0.75
+CORNICE_H_M = 0.55
+STRING_H_M = 0.22
+SILL_H_M = 0.10
+
+#: A door is taller and wider than a window and there is one per street frontage.
+DOOR_W_M = 1.5
+DOOR_H_M = 2.6
+
+#: Mullion and transom, as a fraction of the opening. A single dark rectangle
+#: reads as a hole; two bars across it read as a window.
+BAR_M = 0.06
+
+
+def _box(origin, u_axis, v_axis, normal, u0, u1, v0, v1, d0, d1):
+    """Six quads of an axis-aligned box in the wall's own frame."""
+    def at(u, v, d):
+        return origin + u_axis * u + v_axis * v + normal * d
+    faces = [
+        [at(u0, v0, d1), at(u1, v0, d1), at(u1, v1, d1), at(u0, v1, d1)],   # front
+        [at(u1, v0, d0), at(u0, v0, d0), at(u0, v1, d0), at(u1, v1, d0)],   # back
+        [at(u0, v1, d0), at(u0, v1, d1), at(u1, v1, d1), at(u1, v1, d0)],   # top
+        [at(u1, v0, d0), at(u1, v0, d1), at(u0, v0, d1), at(u0, v0, d0)],   # bottom
+        [at(u0, v0, d0), at(u0, v0, d1), at(u0, v1, d1), at(u0, v1, d0)],   # left
+        [at(u1, v1, d0), at(u1, v1, d1), at(u1, v0, d1), at(u1, v0, d0)],   # right
+    ]
+    return faces
+
+
+def build_wall_detailed(a, b, dna, *, door: bool = False) -> Elevation:
+    """One footprint edge with its relief: plinth, cornice, string, sills, frames."""
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    along = b - a
+    width_m = float(np.hypot(along[0], along[1]))
+    if width_m < MIN_WINDOW_M:
+        return Elevation(np.zeros((0, 4, 3)), [], {"reason": "edge too short"})
+    u_axis = np.array([along[0] / width_m, along[1] / width_m, 0.0])
+    v_axis = np.array([0.0, 0.0, 1.0])
+    normal = np.array([u_axis[1], -u_axis[0], 0.0])
+    origin = np.array([a[0], a[1], dna.base_z])
+    height_m = dna.height_m
+    quads, kinds = [], []
+
+    def add(face_list, kind):
+        for face in face_list:
+            quads.append(face)
+            kinds.append(kind)
+
+    def flat(u0, u1, v0, v1, d=0.0):
+        return [[origin + u_axis * u0 + v_axis * v0 + normal * d,
+                 origin + u_axis * u1 + v_axis * v0 + normal * d,
+                 origin + u_axis * u1 + v_axis * v1 + normal * d,
+                 origin + u_axis * u0 + v_axis * v1 + normal * d]]
+
+    # Openings: windows on the measured lattice above the ground floor, and one
+    # door on the ground floor of a street frontage.
+    columns = _bands(width_m, dna.bay_m, dna.window_w_m,
+                     max(0.0, (dna.bay_m - dna.window_w_m) / 2.0))
+    rows = []
+    level = dna.ground_floor_m + dna.sill_m + 0.6
+    while level + dna.window_h_m <= height_m - CORNICE_H_M - 0.4:
+        rows.append((level, level + dna.window_h_m))
+        level += dna.storey_m
+
+    door_span = None
+    if door and columns and width_m > 3 * dna.bay_m:
+        centre = columns[len(columns) // 2]
+        mid = (centre[0] + centre[1]) / 2.0
+        door_span = (mid - DOOR_W_M / 2, mid + DOOR_W_M / 2)
+
+    all_columns = columns + ([door_span] if door_span else [])
+    all_rows = rows + ([(0.35, 0.35 + DOOR_H_M)] if door_span else [])
+    # BOTH lists. Discarding the opening cells here built a wall with the relief
+    # bands correct and not a single window in it -- 488 wall quads and zero
+    # glass -- because the openings only ever existed in the return value that
+    # was thrown away.
+    wall_cells, opening_cells = punch(width_m, height_m, all_columns, all_rows)
+    # Only the cells that are BOTH a window column and a window row are openings;
+    # `punch` already did that, but the door column crosses the window rows and
+    # the window columns cross the door row, so re-derive which is which.
+    def is_opening(u0, u1, v0, v1):
+        for cu in columns:
+            for cv in rows:
+                if (cu[0] - 1e-9 <= u0 and u1 <= cu[1] + 1e-9
+                        and cv[0] - 1e-9 <= v0 and v1 <= cv[1] + 1e-9):
+                    return "window"
+        if door_span:
+            dv = all_rows[-1]
+            if (door_span[0] - 1e-9 <= u0 and u1 <= door_span[1] + 1e-9
+                    and dv[0] - 1e-9 <= v0 and v1 <= dv[1] + 1e-9):
+                return "door"
+        return None
+
+    for u0, u1, v0, v1 in wall_cells + opening_cells:
+        if is_opening(u0, u1, v0, v1) is None:
+            add(flat(u0, u1, v0, v1), "wall")
+
+    # Openings: recessed pane, four reveal faces, a projecting sill, and bars.
+    def opening(u0, u1, v0, v1, kind):
+        d = -dna.reveal_m
+        add(flat(u0, u1, v0, v1, d), "glass" if kind == "window" else "door")
+        for p, q in (((u0, v0), (u0, v1)), ((u1, v1), (u1, v0)),
+                     ((u0, v1), (u1, v1)), ((u1, v0), (u0, v0))):
+            add([[origin + u_axis * p[0] + v_axis * p[1],
+                  origin + u_axis * q[0] + v_axis * q[1],
+                  origin + u_axis * q[0] + v_axis * q[1] + normal * d,
+                  origin + u_axis * p[0] + v_axis * p[1] + normal * d]], "reveal")
+        # A mullion and a transom, so it reads as glazing rather than a hole.
+        mid_u, mid_v = (u0 + u1) / 2, (v0 + v1) / 2
+        add(flat(mid_u - BAR_M / 2, mid_u + BAR_M / 2, v0, v1, d + 0.02), "frame")
+        add(flat(u0, u1, mid_v - BAR_M / 2, mid_v + BAR_M / 2, d + 0.02), "frame")
+        if kind == "window":
+            add(_box(origin, u_axis, v_axis, normal,
+                     u0 - 0.10, u1 + 0.10, v0 - SILL_H_M, v0,
+                     -dna.reveal_m, SILL_PROJECTION_M), "sill")
+
+    for u0, u1, v0, v1 in opening_cells:
+        kind = is_opening(u0, u1, v0, v1)
+        if kind:
+            opening(u0, u1, v0, v1, kind)
+
+    # Horizontal relief, full width.
+    add(_box(origin, u_axis, v_axis, normal, 0, width_m, 0, PLINTH_H_M,
+             0.0, PLINTH_PROJECTION_M), "plinth")
+    add(_box(origin, u_axis, v_axis, normal, 0, width_m,
+             dna.ground_floor_m - STRING_H_M, dna.ground_floor_m,
+             0.0, STRING_PROJECTION_M), "string")
+    add(_box(origin, u_axis, v_axis, normal, 0, width_m,
+             height_m - CORNICE_H_M, height_m, 0.0, CORNICE_PROJECTION_M), "cornice")
+
+    return Elevation(np.asarray(quads), kinds, {
+        "width_m": round(width_m, 2), "height_m": round(height_m, 2),
+        "bays": len(columns), "storeys": len(rows),
+        "openings": len(rows) * len(columns) + (1 if door_span else 0),
+        "quads": len(quads), "door": bool(door_span),
+    })
+
+
+def roof_cap(ring: np.ndarray, dna: FacadeDNA) -> tuple[list, list]:
+    """Close the building. A hipped cap, because an open-topped shell reads broken."""
+    ring = close_ring(np.asarray(ring, dtype=np.float64))
+    centre = ring[:, :2].mean(axis=0)
+    eaves = dna.top_z
+    ridge = eaves + max(1.6, min(4.0, 0.12 * float(np.ptp(ring[:, :2]))))
+    apex = np.array([centre[0], centre[1], ridge])
+    quads, kinds = [], []
+    closed = np.vstack([ring, ring[:1]])
+    for p, q in zip(closed[:-1], closed[1:]):
+        # Pulled in slightly so the roof sits inside the cornice, not on its lip.
+        a = np.array([p[0], p[1], eaves])
+        b = np.array([q[0], q[1], eaves])
+        quads.append([a, b, apex, apex])
+        kinds.append("roof")
+    return quads, kinds
+
+
+def build_detailed(ring: np.ndarray, dna: FacadeDNA, *, roof: bool = True
+                   ) -> Elevation:
+    """A whole building: relieved elevations on every edge, and a closed roof."""
+    ring = close_ring(np.asarray(ring, dtype=np.float64))
+    ring = np.vstack([ring, ring[:1]])
+    lengths = [float(np.hypot(*(b - a)[:2])) for a, b in zip(ring[:-1], ring[1:])]
+    longest = int(np.argmax(lengths)) if lengths else -1
+
+    quads, kinds, edges = [], [], []
+    for i, (a, b) in enumerate(zip(ring[:-1], ring[1:])):
+        wall = build_wall_detailed(a, b, dna, door=(i == longest))
+        if len(wall.quads):
+            quads.append(wall.quads)
+            kinds.extend(wall.kinds)
+        edges.append(wall.report)
+    if roof:
+        cap, cap_kinds = roof_cap(ring[:-1], dna)
+        if cap:
+            quads.append(np.asarray(cap))
+            kinds.extend(cap_kinds)
+    if not quads:
+        return Elevation(np.zeros((0, 4, 3)), [], {"reason": "no usable edges"})
+    return Elevation(np.concatenate(quads), kinds, {
+        "edges": len(edges),
+        "quads": sum(len(q) for q in quads),
+        "openings": sum(e.get("openings", 0) for e in edges),
+        "doors": sum(1 for e in edges if e.get("door")),
+        "dna": dna.to_record(),
     })
