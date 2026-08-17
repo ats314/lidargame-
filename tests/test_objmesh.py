@@ -221,3 +221,65 @@ def test_a_generous_threshold_keeps_everything(tmp_path):
     assert clean.triangles == mesh.triangles
     assert report["dropped_triangles"] == 0
     assert report["dropped_area_fraction"] == 0.0
+
+
+# --- LOD tree -----------------------------------------------------------------
+#
+# Reading every .obj in a subtile directory was a real bug that shipped and
+# silently corrupted every measurement taken from this mesh. ContextCapture
+# writes nine quadtree levels and each one is a complete copy of the same
+# ground, so the merge stacked 3.4x the triangles a few centimetres apart:
+# surface area came out 441,290 m2 against a true 128,763, the "webbing" figure
+# read 62% of area when the leaves have 2.6%, and the depth buffer the window
+# detector depends on had a coarse roof competing with the fine facade behind
+# it. Nothing raised. These tests exist so it cannot come back.
+
+def quadtree(tmp_path, levels=(13, 14, 15), fan_at=15):
+    """A miniature ContextCapture subtile: one root, a chain, then a fan."""
+    paths = {}
+    for level in levels:
+        depth = level - levels[0]
+        stems = [""] if depth == 0 else ["0" * depth]
+        if level == fan_at:
+            stems = ["0" * (depth - 1) + d for d in "0123"]
+        for stem in stems:
+            name = f"Tile_+039_+025_L{level}" + (f"_{stem}" if stem else "")
+            (tmp_path / f"{name}.obj").write_text(OBJ_SIMPLE.replace("mtllib m.mtl", ""))
+            paths[stem] = tmp_path / f"{name}.obj"
+    return paths
+
+
+def test_only_the_leaf_lod_is_read_by_default(tmp_path):
+    """Each patch of ground once, at the finest sampling available."""
+    quadtree(tmp_path)
+    leaves = objmesh.leaf_objs(tmp_path)
+    assert len(leaves) == 4, "the four L15 children are the leaves"
+    assert all("_L15_" in p.name for p in leaves)
+    assert len(objmesh.read_directory(tmp_path)) == 4
+
+
+def test_reading_every_level_is_available_but_not_the_default(tmp_path):
+    """`lod="all"` reproduces the bug on purpose, for comparing against it."""
+    quadtree(tmp_path)
+    assert len(objmesh.read_directory(tmp_path, lod="all")) == 6   # 1 + 1 + 4
+    assert len(objmesh.read_directory(tmp_path, lod=14)) == 1
+
+
+def test_stacked_levels_would_multiply_the_surface(tmp_path):
+    """The symptom, stated as a number: same ground, more area.
+
+    Each level of the tree covers the subtile completely, so merging them adds
+    surface that does not exist. This is what made a 250 m block report seven
+    times its own ground area in facade.
+    """
+    quadtree(tmp_path)
+    leaf = objmesh.merge(objmesh.read_directory(tmp_path))
+    every = objmesh.merge(objmesh.read_directory(tmp_path, lod="all"))
+    assert every.triangles > leaf.triangles
+
+
+def test_a_directory_without_a_lod_tree_still_reads_everything(tmp_path):
+    """Not every OBJ source is a quadtree, and a flat directory must not lose files."""
+    write(tmp_path)
+    (tmp_path / "second.obj").write_text(OBJ_SIMPLE.replace("mtllib m.mtl", ""))
+    assert len(objmesh.read_directory(tmp_path)) == 2

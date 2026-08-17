@@ -27,6 +27,7 @@ the wrong offset is a building in the wrong street and nothing about it raises.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -174,10 +175,67 @@ def read_obj(path: str | Path) -> Mesh:
         groups=groups, source=path)
 
 
-def read_directory(directory: str | Path, *, limit: int | None = None) -> list[Mesh]:
-    """Every OBJ chunk in a subtile directory, in name order."""
+#: `Tile_+039_+025_L19_000000.obj` is quadtree node `000000` at level 19, and its
+#: child is `L20_0000000`. ContextCapture writes EVERY level of the tree, and
+#: each level is a complete resampled copy of the same ground rather than a new
+#: piece of it -- so a 250 m subtile directory holds nine overlapping copies of
+#: the surface, coarsest first.
+LOD_PATTERN = re.compile(r"_L(\d+)(?:_(\d+))?$")
+
+
+def lod_nodes(directory: str | Path) -> dict[str, tuple[int, Path]]:
+    """quadtree path -> (level, file) for every OBJ in a subtile directory.
+
+    Path length equals level minus the tree's root level, so the parent of
+    `000000` is `00000` and prefix containment is the whole hierarchy.
+    """
+    out: dict[str, tuple[int, Path]] = {}
+    for path in sorted(Path(directory).glob("*.obj")):
+        match = LOD_PATTERN.search(path.stem)
+        if match is None:
+            out[path.stem] = (0, path)          # not a ContextCapture tree
+        else:
+            out[match.group(2) or ""] = (int(match.group(1)), path)
+    return out
+
+
+def leaf_objs(directory: str | Path) -> list[Path]:
+    """Only the finest copy of each patch of ground.
+
+    A node is superseded when some other node's quadtree path extends it, so the
+    survivors tile the subtile exactly once at the deepest level available.
+    """
+    nodes = lod_nodes(directory)
+    keys = set(nodes)
+    leaves = [key for key in keys
+              if not any(other != key and other.startswith(key) for other in keys)]
+    return [nodes[key][1] for key in sorted(leaves)]
+
+
+def read_directory(directory: str | Path, *, limit: int | None = None,
+                   lod: str | int = "leaf") -> list[Mesh]:
+    """The OBJ chunks of a subtile: by default the leaf LOD only.
+
+    Reading every `.obj` in the directory was wrong and wrong in a way nothing
+    raised on. A Helsinki subtile is 216 files across nine quadtree levels and
+    only 64 of them are leaves; the other 152 are the same buildings again at
+    coarser sampling, sitting a few centimetres off the fine surface. Merging
+    them gave 3.4x the triangles, a depth buffer in which a coarse roof could
+    win the depth test against the fine facade behind it, and a relief RMS that
+    was measuring the gap between two LODs rather than the wall.
+
+        lod="leaf"   finest copy of each patch of ground, tiling it once
+        lod="all"    every file, overlaps included -- what the bug did
+        lod=19       one level, for comparing sampling honestly
+    """
     directory = Path(directory)
-    files = sorted(directory.glob("*.obj"))
+    if lod == "leaf":
+        files = leaf_objs(directory)
+    elif lod == "all":
+        files = sorted(directory.glob("*.obj"))
+    else:
+        files = sorted(path for level, path in lod_nodes(directory).values()
+                       if level == int(lod))
     if limit is not None:
         files = files[:limit]
     return [read_obj(f) for f in files]

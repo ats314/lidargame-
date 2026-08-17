@@ -60,21 +60,19 @@ DEFAULT_DETAIL = 1.0
 NEUTRALISE_FRACTION = 0.25
 
 
-def box_blur(image: np.ndarray, radius: int) -> np.ndarray:
-    """Separable box blur with wrap-around, so a tileable input stays tileable.
-
-    Reflecting or clamping at the edge would leave a seam exactly where the tile
-    repeats, which is the one place it must not.
-    """
-    if radius < 1:
-        return image.astype(np.float64)
+def _window_sums(image: np.ndarray, radius: int, wrap: bool) -> np.ndarray:
+    """Separable running sum over a (2r+1)^2 window. Outside is wrapped or zero."""
     out = np.asarray(image, dtype=np.float64)
     window = 2 * radius + 1
     for axis in (0, 1):
-        padded = np.concatenate(
-            [np.take(out, range(-radius, 0), axis=axis),
-             out,
-             np.take(out, range(0, radius), axis=axis)], axis=axis)
+        if wrap:
+            edges = (np.take(out, range(-radius, 0), axis=axis),
+                     np.take(out, range(0, radius), axis=axis))
+        else:
+            shape = list(out.shape)
+            shape[axis] = radius
+            edges = (np.zeros(shape), np.zeros(shape))
+        padded = np.concatenate([edges[0], out, edges[1]], axis=axis)
         # Leading zero so a window sum is one subtraction: sum(i .. i+w-1) is
         # cumulative[i+w] - cumulative[i]. Without it the top index runs one
         # past the end of the cumulative array.
@@ -85,12 +83,91 @@ def box_blur(image: np.ndarray, radius: int) -> np.ndarray:
         n = out.shape[axis]
         lo = np.take(cumulative, range(0, n), axis=axis)
         hi = np.take(cumulative, range(window, window + n), axis=axis)
-        out = (hi - lo) / window
+        out = hi - lo
     return out
+
+
+def box_blur(image: np.ndarray, radius: int, *, wrap: bool = True) -> np.ndarray:
+    """Separable box blur. Wraps by default, so a tileable input stays tileable.
+
+    Reflecting or clamping at the edge would leave a seam exactly where the micro
+    tile repeats, which is the one place it must not.
+
+    `wrap=False` is for the other case, and it is not cosmetic. A rectified
+    facade crop does not repeat: wrapping makes the reference at the sunlit end
+    of a frontage include the shaded end, which is precisely the gradient the
+    de-lighting exists to measure. Outside the crop is then treated as absent
+    rather than as zero -- the window shrinks at the border -- so an edge column
+    is compared against its own neighbourhood and not against a black margin.
+    """
+    if radius < 1:
+        return np.asarray(image, dtype=np.float64)
+    total = _window_sums(image, radius, wrap)
+    if wrap:
+        return total / (2 * radius + 1) ** 2
+    count = _window_sums(np.ones_like(total), radius, False)
+    return total / count
 
 
 #: Rec. 709 luminance. The micro layer contributes brightness detail only.
 LUMA = np.array([0.2126, 0.7152, 0.0722])
+
+#: How wide a low-pass estimates the baked illumination, in metres of wall. Wide
+#: enough to be lighting rather than architecture: a 4 m blur averages across a
+#: whole bay, so a window's own darkness is not mistaken for shadow, while the
+#: sunlit-to-shaded gradient across a frontage survives.
+DELIGHT_SPAN_M = 4.0
+
+#: Below this the de-light divisor is untrustworthy -- a deep shadow divided by
+#: near-zero explodes -- so the result blends back toward the source and the
+#: confidence map says so.
+DELIGHT_FLOOR = 0.06
+
+
+def delight(macro: np.ndarray, *, px_per_m: float,
+            span_m: float = DELIGHT_SPAN_M,
+            strength: float = 1.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Remove the survey flight's lighting from a facade. Returns (albedo, light, confidence).
+
+    A photogrammetric texture is not albedo. It contains the sun, the sky, every
+    self-shadow and the exposure the aircraft flew at:
+
+        C_photo ~ A_intrinsic * L_baked
+
+    Feed it to a renderer as base colour and light it again and the recesses --
+    exactly the features that carry a facade's depth -- get darkened twice. The
+    composite in this module was compensating for that with a raised ambient
+    term, which is a defect being papered over rather than a surface being lit.
+
+    This is the same operation as `neutralise`, pointed at the macro instead of
+    the micro: divide by a wide low-pass of luminance. It is an approximation and
+    not an inverse-rendering solution, so the confidence map records where the
+    divisor was too dark to trust and the caller can blend back toward the
+    original there. Nothing here moves a window, alters geometry or invents
+    detail -- it only flattens illumination.
+    """
+    macro = np.clip(np.asarray(macro, dtype=np.float64), 0.0, 1.0)
+    if macro.ndim == 2:
+        macro = np.repeat(macro[:, :, None], 3, axis=2)
+    radius = max(1, int(round(span_m * px_per_m / 2.0)))
+    luma = macro[:, :, :3] @ LUMA
+    # No wrap: a facade crop is not a tile, and wrapping averages the sunlit end
+    # of a frontage into the shaded end -- the exact gradient being removed.
+    light = box_blur(luma[:, :, None], radius, wrap=False)[:, :, 0]
+
+    confidence = np.clip((light - DELIGHT_FLOOR) / max(DELIGHT_FLOOR, 1e-6), 0.0, 1.0)
+    safe = np.maximum(light, DELIGHT_FLOOR)
+    # Preserve mean brightness exactly. Scaling by the mean of the divisor is
+    # close but not equal -- the division brightens shadow and darkens sun
+    # asymmetrically, and on a real facade that came out 24% darker overall,
+    # which then reads as the de-light "not working" rather than as a missing
+    # normalisation.
+    flattened = macro / safe[:, :, None]
+    blended = macro + (flattened - macro) * (strength * confidence)[:, :, None]
+    before, after = float(macro.mean()), float(blended.mean())
+    if after > 1e-9:
+        blended = blended * (before / after)
+    return np.clip(blended, 0.0, 1.0), light, confidence
 
 
 def neutralise(micro: np.ndarray, *, fraction: float = NEUTRALISE_FRACTION,

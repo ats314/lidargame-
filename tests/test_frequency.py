@@ -153,3 +153,96 @@ def test_the_record_keeps_measured_and_generated_apart():
     assert record["macro_epistemic"] == "derived"     # somebody's photogrammetry
     assert record["micro_epistemic"] == "generated"   # synthesised here
     assert record["micro_tile_m"] == 0.3
+
+
+# --- de-lighting --------------------------------------------------------------
+#
+# A photogrammetric texture is not albedo: it carries the sun, the sky and every
+# self-shadow the aircraft flew under. Lighting it again in an engine darkens the
+# recesses twice, and the recesses are what carry a facade's depth. The composite
+# above was compensating with a raised ambient term, which papers over the defect
+# rather than fixing it.
+
+def gradient(size=800, low=0.18, high=0.62):
+    """A wall lit brightly at one end, as a survey flight leaves them.
+
+    Wide on purpose. At 40 px/m this is 20 m of frontage against a 4 m reference
+    span, so the reference is genuinely local. A 6 m crop makes the low-pass two
+    thirds of the image, which is not a local reference and cannot flatten
+    anything -- the first version of this test asserted a 50% reduction on one
+    and got 21%, which is the geometry failing, not the operation.
+    """
+    ramp = np.linspace(low, high, size)[None, :, None]
+    return np.repeat(np.repeat(ramp, 160, axis=0), 3, axis=2)
+
+
+def test_delighting_flattens_the_illumination_gradient():
+    """The whole claim: less variation in the low frequency, same picture."""
+    macro = gradient()
+    albedo, light, _ = fq.delight(macro, px_per_m=40.0)
+    span = lambda img: float(fq.box_blur(img[:, :, :1], 12, wrap=False).std())
+    assert span(albedo) < 0.2 * span(macro)
+    assert light.shape == macro.shape[:2]
+
+
+def test_the_illumination_estimate_does_not_wrap_around_the_crop():
+    """A facade is not a tile. Wrapping puts the sunlit end into the shaded end.
+
+    With wrap the reference at column 0 averages in the far end of the wall, so
+    the darkest column reads as if it were mid-brightness and comes out
+    brightened toward it. The edge has to be compared against its own
+    neighbourhood.
+    """
+    macro = gradient()
+    wrapped = fq.box_blur((macro[:, :, :3] @ fq.LUMA)[:, :, None], 80)[:, :, 0]
+    local = fq.box_blur((macro[:, :, :3] @ fq.LUMA)[:, :, None], 80,
+                        wrap=False)[:, :, 0]
+    dark = float(macro[0, 0, :] @ fq.LUMA)
+    assert abs(local[0, 0] - dark) < abs(wrapped[0, 0] - dark)
+
+
+def test_delighting_preserves_overall_brightness():
+    """Scaling by the mean of the divisor is close but not equal.
+
+    On a real facade the naive version came out 24% darker, which then reads as
+    "de-lighting does not work" rather than as a missing normalisation.
+    """
+    macro = gradient()
+    albedo, _, _ = fq.delight(macro, px_per_m=40.0)
+    assert float(albedo.mean()) == pytest.approx(float(macro.mean()), rel=0.03)
+
+
+def test_delighting_cannot_shift_hue():
+    """The divisor is luminance, so all three channels move by the same factor."""
+    macro = pink(size=240) * np.linspace(0.4, 1.0, 240)[None, :, None]
+    albedo, _, _ = fq.delight(macro, px_per_m=40.0)
+    before = macro.reshape(-1, 3).mean(0)
+    after = albedo.reshape(-1, 3).mean(0)
+    assert after[0] / after[2] == pytest.approx(before[0] / before[2], rel=0.02)
+
+
+def test_zero_strength_is_the_identity():
+    macro = gradient()
+    albedo, _, _ = fq.delight(macro, px_per_m=40.0, strength=0.0)
+    assert np.allclose(albedo, macro, atol=1e-9)
+
+
+def test_a_deep_shadow_is_reported_as_low_confidence_not_divided_out():
+    """Dividing a near-black recess by a near-zero divisor explodes.
+
+    So the estimate blends back toward the photograph there and says so, rather
+    than emitting a blown-out patch that looks like detail.
+    """
+    macro = np.full((160, 160, 3), 0.5)
+    macro[40:80, 40:80] = 0.01                      # a black hole in the wall
+    albedo, _, confidence = fq.delight(macro, px_per_m=40.0, span_m=0.5)
+    assert confidence[60, 60] < 0.3
+    assert confidence[10, 10] > 0.9
+    assert albedo.max() <= 1.0
+
+
+def test_delighting_leaves_a_flat_wall_alone():
+    """Nothing to remove means nothing removed. Guards against a global tint."""
+    macro = flat(0.42, size=200)
+    albedo, _, _ = fq.delight(macro, px_per_m=40.0)
+    assert np.allclose(albedo, macro, atol=0.01)

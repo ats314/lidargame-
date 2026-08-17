@@ -59,6 +59,11 @@ class Facade:
     normal: np.ndarray
     resolution_px_per_m: float              # what the *source* actually supplied
     covered: float                          # fraction of the crop with real pixels
+    #: Distance in front of the facade plane, metres, NaN where uncovered. The
+    #: rectifier computes this to resolve overlaps and used to discard it, which
+    #: threw away the best window detector available: a reveal is a step in
+    #: depth, measured, where a mask inferred from 10 px/m pixels is a guess.
+    depth: np.ndarray | None = None
     meta: dict = field(default_factory=dict)
 
     def to_world(self, x_px: float, y_px: float) -> np.ndarray:
@@ -626,12 +631,13 @@ def rectify_mesh(mesh, slab: dict, *, px_per_m: float = DEFAULT_PX_PER_M,
                                            scaled[2] - scaled[0]))) / 2.0
 
     corner = u_lo * u_axis + v_lo * v_axis + offset * normal
+    surface = np.where(filled, depth, np.nan)
     return Facade(
         surface_id="mesh_facade", building_id=None, image=image,
         px_per_m=float(scale), width_m=width_m, height_m=height_m,
         origin_xyz=corner, u_axis=u_axis, v_axis=v_axis, normal=normal,
         resolution_px_per_m=float(np.sqrt(total_px / total_m2)) if total_m2 else 0.0,
-        covered=float(filled.mean()))
+        covered=float(filled.mean()), depth=surface)
 
 
 def load_atlas(path: str | Path) -> np.ndarray:
