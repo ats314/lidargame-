@@ -306,6 +306,32 @@ def export_mesh(positions: np.ndarray, uvs: np.ndarray,
 
     out_path = Path(out_path)
     positions = np.asarray(positions, dtype=np.float64)
+
+    # Keep only vertices some triangle actually uses, and reindex.
+    #
+    # A cropped mesh arrives with the whole tile's vertex array and a subset of
+    # its faces. Writing that out is not merely wasteful -- it makes the file
+    # lie about its own extent, because POSITION min/max then describe the
+    # uncropped tile. Anything that frames a camera from the accessor bounds
+    # aims at empty space, which is exactly what happened: pedestrian cameras
+    # were placed in the 250 m subtile's outer ring while only the central
+    # 140 m had geometry, and rendered 0% coverage.
+    used = np.zeros(len(positions), dtype=bool)
+    for group in groups:
+        faces = np.asarray(group.faces).reshape(-1)
+        if len(faces):
+            used[faces] = True
+    if used.any() and not used.all():
+        remap = np.full(len(positions), -1, dtype=np.int64)
+        remap[used] = np.arange(int(used.sum()))
+        positions = positions[used]
+        uvs = np.asarray(uvs)
+        if len(uvs) == len(used):
+            uvs = uvs[used]
+        groups = [type(g)(g.material, g.image,
+                          remap[np.asarray(g.faces).reshape(-1, 3)])
+                  for g in groups if len(np.asarray(g.faces))]
+
     if origin is None:
         origin = ((positions.min(axis=0) + positions.max(axis=0)) / 2.0
                   if len(positions) else np.zeros(3))

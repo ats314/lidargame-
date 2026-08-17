@@ -287,14 +287,108 @@ PEDESTRIAN_STANDOFFS = (1.0, 5.0, 20.0, 50.0)
 EYE_HEIGHT_M = 1.7
 
 
+#: A cell with less than this much vertical extent is open ground -- street,
+#: pavement, square. More than the wall threshold and it is a building.
+OPEN_MAX_RELIEF_M = 2.5
+WALL_MIN_HEIGHT_M = 6.0
+CELL_M = 1.0
+
+#: Neighbourhood for the local ground estimate: wide enough to span a building
+#: so a roof is compared against the street beside it, narrow enough to follow
+#: real terrain rather than flattening a hill into one datum.
+GROUND_NEIGHBOURHOOD_M = 60.0
+GROUND_TOLERANCE_M = 2.0
+
+
+def occupancy(positions: np.ndarray, cell: float = CELL_M):
+    """Per-cell ground and roof height on an XY grid. glTF is Y-up.
+
+    Everything below needs to know where the street is, and a mesh does not say.
+    Binning vertices is enough: a street cell holds only pavement, so its
+    vertical extent is small; a building cell spans from pavement to roof.
+    """
+    ground_plane = positions[:, [0, 2]]
+    height = positions[:, 1]
+    lo = ground_plane.min(axis=0)
+    index = np.floor((ground_plane - lo) / cell).astype(np.int64)
+    nx, ny = index.max(axis=0) + 1
+    flat = index[:, 0] * ny + index[:, 1]
+    low = np.full(nx * ny, np.inf, dtype=np.float64)
+    high = np.full(nx * ny, -np.inf, dtype=np.float64)
+    np.minimum.at(low, flat, height)
+    np.maximum.at(high, flat, height)
+    return lo, cell, low.reshape(nx, ny), high.reshape(nx, ny)
+
+
+def street_views(positions: np.ndarray, standoffs=PEDESTRIAN_STANDOFFS) -> dict:
+    """Eye-height cameras standing in a street, facing a facade.
+
+    Placing the eye at `bounds.min + 1.7` and aiming at the scene centroid puts
+    the camera underground and inside a building -- which is exactly what it did
+    on the first attempt, producing a frame of building undersides against void.
+    A mesh's minimum height is a basement or a void triangle, not the pavement,
+    and its centroid is masonry.
+
+    So: find open cells, find wall cells, and for each standoff pick the open
+    cell that actually stands that far from a wall. The camera is then somewhere
+    a person could stand, looking at something a person would look at, which is
+    the only way a distance series means anything.
+    """
+    from scipy import ndimage
+
+    origin, cell, low, high = occupancy(positions)
+    relief = high - low
+    finite = np.isfinite(relief)
+
+    # Flat is not the same as ground. A flat roof patch has small vertical
+    # relief too, so the first version of this happily stood the camera on
+    # rooftops -- eye heights swung 18 m across four shots and every frame
+    # looked down at a neighbouring block. Open ground must also be *near local
+    # ground*, which is the minimum surface in a neighbourhood wide enough to
+    # span a building and narrow enough to follow a hill.
+    filled = np.where(finite, low, np.inf)
+    local_ground = ndimage.minimum_filter(
+        filled, size=int(round(GROUND_NEIGHBOURHOOD_M / cell)), mode="nearest")
+    near_ground = finite & (low <= local_ground + GROUND_TOLERANCE_M)
+
+    open_cell = finite & (relief < OPEN_MAX_RELIEF_M) & near_ground
+    wall_cell = finite & (relief > WALL_MIN_HEIGHT_M)
+    views: dict = {}
+    if not open_cell.any() or not wall_cell.any():
+        return views
+
+    # Distance to the nearest wall, by exact Euclidean distance transform.
+    # The obvious pairwise form is 39,765 open cells against 9,141 wall cells --
+    # 364 million distances for a 250 m crop, and it grows with the square of
+    # the area. The transform is linear in cells and returns the nearest wall's
+    # index alongside the distance, which is what aiming the camera needs.
+    from scipy import ndimage
+
+    distance, indices = ndimage.distance_transform_edt(
+        ~wall_cell, return_indices=True, sampling=(cell, cell))
+    open_ij = np.argwhere(open_cell)
+    nearest_m = distance[open_cell]
+
+    for standoff in standoffs:
+        slot = int(np.argmin(np.abs(nearest_m - standoff)))
+        achieved = float(nearest_m[slot])
+        oi, oj = open_ij[slot]
+        wi, wj = int(indices[0, oi, oj]), int(indices[1, oi, oj])
+        ground = float(low[oi, oj])
+        eye = np.array([origin[0] + (oi + 0.5) * cell, ground + EYE_HEIGHT_M,
+                        origin[1] + (oj + 0.5) * cell])
+        # Aim a little above eye level so a tall facade fills the frame rather
+        # than the pavement doing it.
+        target = np.array([origin[0] + (wi + 0.5) * cell,
+                           ground + EYE_HEIGHT_M + max(1.0, achieved * 0.35),
+                           origin[1] + (wj + 0.5) * cell])
+        views[f"{standoff:g}m"] = (eye, target, achieved)
+    return views
+
+
 def pedestrian_views(lo: np.ndarray, hi: np.ndarray,
                      standoffs=PEDESTRIAN_STANDOFFS) -> dict:
-    """Eye-height cameras looking horizontally at the middle of the scene.
-
-    Expressed in metres from the target rather than as a fraction of the scene,
-    so two models of different extent are photographed identically. glTF is
-    Y-up, so y is height and x/z are the ground plane.
-    """
+    """Fallback framing when there is no usable street in the model."""
     centre = (lo + hi) / 2.0
     ground = float(lo[1])
     views = {}
@@ -302,12 +396,6 @@ def pedestrian_views(lo: np.ndarray, hi: np.ndarray,
         eye = np.array([centre[0], ground + EYE_HEIGHT_M, centre[2] + standoff])
         target = np.array([centre[0], ground + EYE_HEIGHT_M, centre[2]])
         views[f"{standoff:g}m"] = (eye, target)
-    span = float(np.max(hi - lo))
-    views["oblique12m"] = (
-        np.array([centre[0] - 12.0, ground + EYE_HEIGHT_M, centre[2] + 12.0]),
-        np.array([centre[0], ground + 8.0, centre[2]]))
-    views["overview"] = (
-        centre + np.array([span * 0.5, span * 0.45, span * 0.5]), centre)
     return views
 
 
@@ -333,7 +421,33 @@ def main() -> int:
     # glTF is Y-up: y is height, x/z are the ground plane.
     ground = float(lo[1])
     if args.pedestrian:
-        views = pedestrian_views(lo, hi)
+        gltf, binary = read_glb(args.glb)
+        placement = node_transforms(gltf)
+        # One accessor per mesh, not per primitive: a mesh exported from
+        # `export_mesh` shares a single POSITION accessor across every material
+        # run, so gathering per primitive stacked the same 755k vertices 132
+        # times into 99.7 million points.
+        pts, seen = [], set()
+        for mi, mesh in enumerate(gltf.get("meshes", [])):
+            model = placement.get(mi, np.eye(4))
+            for prim in mesh["primitives"]:
+                slot = prim["attributes"]["POSITION"]
+                if (mi, slot) in seen:
+                    continue
+                seen.add((mi, slot))
+                p3 = accessor(gltf, binary, slot)
+                pts.append((model @ np.column_stack(
+                    [p3, np.ones(len(p3))]).T).T[:, :3])
+        found = street_views(np.vstack(pts)) if pts else {}
+        if found:
+            views = {}
+            for name, entry in found.items():
+                eye, target, achieved = entry
+                views[name] = (eye, target)
+                print(f"  camera {name}: standing {achieved:.1f} m from a wall")
+        else:
+            print("  no usable street found; falling back to centroid framing")
+            views = pedestrian_views(lo, hi)
     else:
         views = {
             "overview": (centre + np.array([span * 0.55, span * 0.5, span * 0.55]),
