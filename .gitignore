@@ -47,3 +47,8 @@ probe.mjs
 # wien.gv.at, so reproducible rather than vendored. URLs in data/vienna.py.
 /data/vienna/*.zip
 /data/vienna/extracted/
+
+# Hamburg LoD3.0-HH tiles: dl-de/by-2-0 and directly downloadable from
+# daten-hamburg.de, so reproducible rather than vendored. One inner-city tile is
+# 199 MB. URLs and per-tile extraction in data/hamburg.py.
+/data/hamburg/
