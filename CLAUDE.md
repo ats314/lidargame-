@@ -128,6 +128,7 @@ src/lidarworld/
                 program.py: generative programs + their measured residual,
                 seed.py: the World Seed a generator expands into a place
   data/         source catalogue, tile fetcher, header-only tile index,
+                catalog_index.py: published extents -> download URLs,
                 denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
@@ -138,12 +139,13 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 149 tests, ~3s
+python -m pytest tests/ -q                    # 157 tests, ~3s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
 lidarworld fetch denver_lodo -o data/real     # pull a real 3DEP tile
 lidarworld tiles data/real --area x,y,size    # header-only index; what covers this?
+lidarworld tiles . --remote --area=lon,lat,deg # what to DOWNLOAD; 6,505 Denver tiles
 lidarworld compile data/real --area x,y,size -o build/x \
   --footprints denver --streets denver --theme victorian --theme neon --sir
 python tools/shoot.py --out build/shots        # render it and LOOK at it
