@@ -104,7 +104,8 @@ def test_no_depth_is_reported_as_no_depth_rather_than_no_windows():
     """A missing input and an empty answer are different facts."""
     mask, report = op.reveal_mask(facade(depth=None))
     assert not mask.any()
-    assert report["reason"] == "no depth"
+    assert report["reason"] == "no usable depth"
+    assert report["resolves_reveals"] is False
 
 
 def test_uncovered_pixels_do_not_become_openings():
@@ -174,3 +175,89 @@ def test_the_record_says_the_lattice_is_derived_not_measured():
     assert op.lattice(crop).to_record()["epistemic"] == "derived"
     report = op.openings(crop)
     assert "measured depth" in report["depth"]["evidence"]
+
+
+# --- the refusal path ---------------------------------------------------------
+#
+# The Helsinki reality mesh does not resolve window reveals. Locally its depth is
+# flat to 4-10 cm and a window sits about 5 cm off its own wall, so everything
+# that cleared a 0.18 m threshold was a building-scale recess or a crop-edge
+# artefact. A detector that returns those is worse than one that returns nothing:
+# the edge artefacts fed the lattice and produced a 1.60 m bay on a facade whose
+# bays measure 3.77 m.
+
+def noisy_wall(noise_m, size=(200, 300), seed=3):
+    rng = np.random.default_rng(seed)
+    return 10.0 + rng.normal(0.0, noise_m, size)
+
+
+def test_a_depth_map_too_smooth_for_a_reveal_says_so():
+    """4 cm of local relief cannot support an 18 cm reveal. Say it, don't guess."""
+    mask, report = op.reveal_mask(facade(depth=noisy_wall(0.01), shape=(200, 300)))
+    assert not mask.any()
+    assert report["resolves_reveals"] is False
+    assert "resolves" in report["reason"]
+
+
+def test_a_boundary_band_is_not_a_row_of_windows():
+    """Half a wall/pavement transition reads as recessed against a blended mean.
+
+    This was the actual failure: 8.6% of a Helsinki frontage flagged, essentially
+    all of it in three bands at the crop edges and almost none on the windows.
+    """
+    depth = np.full((200, 400), 10.0)
+    depth[150:, :] = 14.0                       # the pavement, 4 m further off
+    mask, report = op.reveal_mask(facade(depth=depth, shape=depth.shape))
+    # Nothing within a reference span of the step may be flagged.
+    edge = slice(150 - 40, 150 + 40)
+    assert not mask[edge].any(), (
+        f"{mask[edge].sum()} pixels flagged in the transition band")
+
+
+def test_the_wall_band_excludes_the_pavement_and_the_roof():
+    depth = np.full((300, 400), 10.0)
+    depth[:40] = 16.0                           # roof, sloping away
+    depth[260:] = 15.0                          # pavement
+    depth += np.random.default_rng(0).normal(0, 0.1, depth.shape)
+    top, bottom = op.wall_band(facade(depth=depth, shape=depth.shape))
+    assert top >= 40 and bottom <= 260, f"band {top}-{bottom} of 300"
+
+
+def test_the_lattice_prefers_whichever_signal_is_actually_stronger():
+    """Preferring the mask because it is "measured" was wrong when it is noise.
+
+    The reasoning -- a measured recess beats a photograph -- is right, and the
+    premise was false for this mesh. Measuring both and choosing means a survey
+    that does resolve reveals still wins on its merits.
+    """
+    rng = np.random.default_rng(1)
+    rows, cols = 200, 400
+    px = 20.0
+    # A photograph with a clean 3 m bay, and a mask that is pure noise.
+    image = np.full((rows, cols, 3), 200, dtype=np.uint8)
+    for c in range(int(1.5 * px), cols, int(3.0 * px)):
+        image[:, c - 8:c + 8] = 40
+    crop = facade(image=image, depth=np.full((rows, cols), 10.0), px_per_m=px)
+    junk = rng.random((rows, cols)) > 0.97
+    grid = op.lattice(crop, mask=junk)
+    assert grid.bay_source == "luminance", grid.to_record()
+    assert grid.bay_m == pytest.approx(3.0, abs=0.3)
+
+
+def test_grid_points_sit_on_the_dark_openings_not_the_bright_piers():
+    """Phase must maximise openness, and a window is the DARK part of a photograph.
+
+    Getting the polarity backwards leaves the period exactly right and puts every
+    point on the pier between two windows, which is convincing in a render until
+    you notice the lines avoid every opening.
+    """
+    rows, cols, px = 200, 400, 20.0
+    image = np.full((rows, cols, 3), 200, dtype=np.uint8)
+    centres = list(range(int(1.5 * px), cols, int(3.0 * px)))
+    for c in centres:
+        image[:, c - 8:c + 8] = 40
+    grid = op.lattice(facade(image=image, px_per_m=px))
+    placed = grid.bays * px
+    nearest = [min(abs(p - c) for c in centres) for p in placed if 0 <= p < cols]
+    assert np.median(nearest) < 0.5 * px, (
+        f"grid at {np.round(placed, 1)} against windows at {centres}")

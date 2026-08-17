@@ -157,3 +157,41 @@ def subtile_origin(name: str) -> tuple[int, int] | None:
     if east < EASTING_PREFIX:
         east += EASTING_PREFIX
     return east, north
+
+
+#: The mesh's local origin, measured. Every OBJ in every tile is written in
+#: metres past this point, and nothing in the data says so -- no PRJ, no metadata
+#: file, no comment in the OBJ. It was recovered by taking a subtile's local
+#: bounds, rounding down to the 2 km grid, and subtracting that from the absolute
+#: corner its tile name decodes to; tiles 672496 and 674498 agree on it.
+#:
+#: Kept as a cross-check rather than used directly. `local_offset` derives the
+#: same number per subtile from the tile name, which fails loudly on a tile that
+#: does not follow the convention where a hard-coded constant would place the
+#: mesh silently in the wrong street.
+MESH_LOCAL_ORIGIN = (25_490_000.0, 6_668_000.0)
+
+
+def local_offset(code: str, local_xy) -> tuple[float, float, float]:
+    """local + offset = absolute EPSG:3879, derived from a tile or quadrant name.
+
+    `local_xy` is any point known to be inside the named square -- the subtile's
+    minimum corner will do. Every name in this dataset, whether it labels a 2 km
+    archive or a 1 km group of subtiles inside one, decodes to the south-west
+    corner of its square in whole kilometres. So rounding the local point down to
+    the kilometre grid gives that same corner in local coordinates, and the
+    difference is the translation.
+
+    Rounding to `TILE_M` instead looks equivalent and is not: a 2 km archive
+    holds four 1 km groups named for their own corners, so `673497d1` sits inside
+    archive `672496`, and flooring its local (7500, 5500) to 2 km lands on the
+    archive's corner while the name gives the group's. That is a 1 km error,
+    which is a mesh dropped into the next district with nothing raising.
+
+    Heights need no offset: the mesh z and the CityGML z are both N2000 metres
+    above sea level, which is what makes a roof height comparable between the two
+    models without a datum conversion.
+    """
+    east, north = Tile(code, "").origin
+    corner = (float(local_xy[0]) // 1000 * 1000, float(local_xy[1]) // 1000 * 1000)
+    return (east - corner[0], north - corner[1], 0.0)
