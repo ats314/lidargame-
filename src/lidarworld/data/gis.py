@@ -287,3 +287,48 @@ def fetch_streets(layer: StreetLayer, bbox, *, out_crs: str, in_crs: str = "4326
     return fetch_footprints(shim, bbox, out_crs=out_crs, in_crs=in_crs,
                             max_records=max_records)
 
+
+@dataclass
+class WaterLayer:
+    """A surveyed water-body layer. Served by OGC API Features rather than WFS
+    or ArcGIS -- the Dutch BGT publishes its 49 collections that way."""
+    id: str
+    name: str
+    service: str
+    collection: str
+    license: str
+    attribution: str
+    default_crs: str = "28992"
+    notes: str = ""
+
+
+WATER: dict[str, WaterLayer] = {
+    "amsterdam": WaterLayer(
+        id="amsterdam",
+        name="BGT waterdeel",
+        service="https://api.pdok.nl/lv/bgt/ogc/v1",
+        collection="waterdeel",
+        license="CC BY 4.0 (public task data) -- Kadaster / PDOK",
+        attribution="BGT, Kadaster (CC BY 4.0)",
+        notes="The canals as surveyed polygons. In Amsterdam this is not a "
+              "detail: without it a quarter of the ground plane is a hole the "
+              "mesher correctly refuses to surface, and the world stops at the "
+              "quay.",
+    ),
+}
+
+
+def fetch_water(layer: WaterLayer, bbox, *, limit: int = 2000) -> dict:
+    """Water polygons over a bbox in the layer's own CRS, as GeoJSON."""
+    query = urllib.parse.urlencode({
+        "bbox": ",".join(str(round(float(v), 2)) for v in bbox),
+        "bbox-crs": f"http://www.opengis.net/def/crs/EPSG/0/{layer.default_crs}",
+        "crs": f"http://www.opengis.net/def/crs/EPSG/0/{layer.default_crs}",
+        "limit": limit,
+        "f": "json",
+    })
+    url = f"{layer.service}/collections/{layer.collection}/items?{query}"
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=180) as response:
+        return json.load(response)
+

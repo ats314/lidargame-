@@ -81,16 +81,26 @@ function buildNodeNames(header, graph) {
   return names;
 }
 
-/** Coarse max-height grid over walkable roles, used for gravity in walk mode. */
+/** Coarse max-height grid over walkable roles, used for gravity in walk mode.
+ *
+ * Water is terrain and is not walkable. The compiler fills a surveyed canal at
+ * an inferred level, which is what stops the ground ending at the quay -- but a
+ * surface you can stroll across is a worse lie than a hole, so water cells are
+ * flagged here and the walk controller refuses to enter them. Fly mode is
+ * unaffected: looking down at a canal from above is the point of fly mode.
+ */
 function buildHeightfield(positions, role, header, cell = 1.0) {
   const [lo, hi] = header.bounds;
   const nx = Math.max(1, Math.ceil((hi[0] - lo[0]) / cell) + 1);
   const ny = Math.max(1, Math.ceil((hi[1] - lo[1]) / cell) + 1);
   const grid = new Float32Array(nx * ny).fill(-Infinity);
   const walkable = new Set();
+  const wet = new Set();
   header.roles.forEach((r, i) => {
     if (r.id.startsWith('terrain')) walkable.add(i);
+    if (r.id === 'terrain.water') wet.add(i);
   });
+  const water = new Uint8Array(nx * ny);
 
   const count = positions.length / 3;
   for (let i = 0; i < count; i++) {
@@ -101,6 +111,7 @@ function buildHeightfield(positions, role, header, cell = 1.0) {
     const k = gy * nx + gx;
     const z = positions[i * 3 + 2];
     if (z > grid[k]) grid[k] = z;
+    if (wet.has(role[i])) water[k] = 1;
   }
   // Fill unseen cells so the player never falls through a scan shadow.
   let fallback = 0;
@@ -112,7 +123,12 @@ function buildHeightfield(positions, role, header, cell = 1.0) {
   for (let i = 0; i < grid.length; i++) if (grid[i] === -Infinity) grid[i] = fallback;
 
   return {
-    cell, nx, ny, origin: [lo[0], lo[1]], grid,
+    cell, nx, ny, origin: [lo[0], lo[1]], grid, water,
+    isWater(x, y) {
+      const ix = Math.min(this.nx - 1, Math.max(0, Math.floor((x - this.origin[0]) / this.cell)));
+      const iy = Math.min(this.ny - 1, Math.max(0, Math.floor((y - this.origin[1]) / this.cell)));
+      return this.water[iy * this.nx + ix] === 1;
+    },
     sample(x, y) {
       const fx = (x - this.origin[0]) / this.cell;
       const fy = (y - this.origin[1]) / this.cell;
