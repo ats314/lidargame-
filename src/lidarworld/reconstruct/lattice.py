@@ -41,6 +41,11 @@ class Opening:
     height: float
     sill_height: float               # metres above the patch's lowest edge
     confidence: float
+    #: True when nothing was measured here and the opening was invented. The
+    #: detector never sets it; `fenestrate` always does. Downstream this is the
+    #: difference between "the returns show a hole" and "a wall of this size
+    #: has windows somewhere".
+    generated: bool = False
 
 
 @dataclass

@@ -29,6 +29,7 @@ from .features import ground as ground_stage
 from .features import neighborhood
 from .reconstruct import extrude as extrude_stage
 from .reconstruct import freespace
+from .reconstruct import fenestrate as fenestrate_stage
 from .reconstruct import lattice as lattice_stage
 from .reconstruct import mesh as mesh_stage
 from .reconstruct import terrain as terrain_stage
@@ -87,6 +88,11 @@ class Config:
     #: lidarworld.data.gis.FOOTPRINTS to fetch for the compiled extent.
     footprints: str | None = None
     detect_openings: bool = True
+    #: Cut generated windows into walls that were extruded rather than
+    #: measured. Those facades carry no returns at all, so nothing can be
+    #: detected on them and a blank wall is an invention exactly as much as a
+    #: fenestrated one -- see reconstruct/fenestrate.py.
+    generate_openings: bool = True
     min_opening_area: float = 0.35
     max_opening_area: float = 14.0
     instance_trees: bool = True
@@ -280,6 +286,7 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
     with world.stage("lattice", tile=config.tile) as rec:
         lattices = {}
         total_openings = 0
+        generated_openings = 0
         # Synthesised surfaces are the compiler's own guesses, so they get
         # checked against the returns before they are allowed to exist.
         free = (freespace.FreeSpace(cloud.xyz, raster, clearance=config.free_clearance)
@@ -292,6 +299,9 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                 lat = lattice_stage.build_solid(
                     patch, patch.extent[0], patch.extent[1], cell=config.tile,
                     ground_z=patch.attrs.get("base_z"))
+                if config.generate_openings:
+                    generated_openings += fenestrate_stage.fenestrate(
+                        lat, patch, key=patch.attrs.get("building") or patch.id)
                 if free is not None:
                     cleared, rejected = freespace.gate_lattice(lat, patch, free)
                     gated_cells += cleared
@@ -304,10 +314,15 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                                                  after + cleared + lat.solid_count]
                     if rejected:
                         gated_patches.add(patch.id)
+                        generated_openings -= len(lat.openings)
                         continue
                     if cleared:
                         patch.attrs["free_space_cleared"] = cleared
                 lattices[patch.id] = lat
+                # The extruded branch returns early, so it has to count its own
+                # openings; leaving this to the shared line below meant every
+                # generated window was cut and then reported as zero.
+                total_openings += len(lat.openings)
                 continue
             pts = cloud.xyz[patch.point_idx]
             ground_z = float(np.percentile(pts[:, 2], 2))
@@ -343,7 +358,9 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         roof_fill = [l.solid_count / max(l.occupancy.size, 1)
                      for p in patches if p.role.startswith("surface.roof")
                      for l in (lattices.get(p.id),) if l is not None]
-        rec.notes = f"{sum(l.solid_count for l in lattices.values()):,} tiles, {total_openings} openings"
+        rec.notes = (f"{sum(l.solid_count for l in lattices.values()):,} tiles, "
+                     f"{total_openings} openings "
+                     f"({generated_openings} generated on extruded walls)")
         if roof_fill:
             mean_fill = float(np.mean(roof_fill))
             cells = [lattices[p.id].cell for p in patches
