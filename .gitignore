@@ -62,3 +62,6 @@ probe.mjs
 # mesh is 190 GB over 122 tiles; the nine central tiles are 13.3 GB and one
 # unpacks to thousands of OBJ/MTL/JPEG files. URLs in data/helsinki.py.
 /data/helsinki/
+
+# walk_shot.py stages a compiled model here to keep the fetch same-origin.
+viewer/three/_model/
