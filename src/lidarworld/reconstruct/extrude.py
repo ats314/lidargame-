@@ -168,6 +168,14 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
         # regenerated instead of predicted.
         program = program_ir.extrusion(f"bldg.{f:04d}", ring, base, top,
                                        roof="flat", source=source)
+        # The publisher's own building id, carried through to the seed. Without
+        # it a later comparison against the same register has to join on
+        # geometry and guess, which is a worse answer to a question the data
+        # already answers -- 3D BAG states a height per BAG id, and so does this.
+        published_id = (attrs[f].get("source_id")
+                        if attrs and f < len(attrs) else None)
+        if published_id:
+            program.params["source_id"] = str(published_id)
         agree = ""
         if source == "measured" and stated is not None:
             # Both numbers exist: report the disagreement rather than hiding it.
