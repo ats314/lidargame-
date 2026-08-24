@@ -49,7 +49,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="compiled .gltf or .glb")
     ap.add_argument("--out", default="build/shots")
-    ap.add_argument("--views", default=",".join(VIEWS))
+    ap.add_argument("--views", default="found," + ",".join(VIEWS),
+                    help="'found' asks the page for the most open standing spot "
+                         "rather than using a pose tuned to another city")
     ap.add_argument("--lights", default="evening")
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--width", type=int, default=1600)
@@ -109,6 +111,20 @@ def main() -> int:
                 page.evaluate("([e, b]) => window.walk.setSun(e, b)", list(LIGHTS[light]))
                 page.wait_for_timeout(400)
                 for name in args.views.split(","):
+                    if name == "found":
+                        # Fixed offsets are tuned to one block and wrong for
+                        # the next -- the Denver poses land flat against an
+                        # Amsterdam facade. Let the page find a street.
+                        spot = page.evaluate("() => window.walk.findStreet()")
+                        if spot is None:
+                            print("  no open standing spot found; skipping")
+                            continue
+                        print(f"  found a spot with {spot['clearance']:.1f} m clearance")
+                        page.wait_for_timeout(900)
+                        path = out / f"{light}-found.png"
+                        page.screenshot(path=str(path))
+                        print(f"  wrote {path}")
+                        continue
                     if name not in VIEWS:
                         continue
                     eye, target = VIEWS[name]

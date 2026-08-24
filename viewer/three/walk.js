@@ -266,6 +266,66 @@ new GLTFLoader().load(MODEL, (gltf) => {
       euler.setFromQuaternion(camera.quaternion);
       groundHeld = false;
     },
+    /**
+     * A standing spot with room around it, and something to look at.
+     *
+     * Fixed camera offsets from the model centre are tuned to one block and
+     * wrong for the next: the Denver poses put the lens flat against a facade,
+     * and the same happened to the other viewer's poses on Amsterdam. A street
+     * is not at a known offset, but it is findable -- it is the place with the
+     * most clearance around it.
+     *
+     * Samples a grid at eye height, casts a ring of rays from each candidate,
+     * and keeps the one whose *nearest* obstruction is furthest away. Then it
+     * aims at the closest thing tall enough to be a building, so the frame has
+     * a subject rather than a vanishing point.
+     */
+    findStreet({ samples = 14, rays = 12, minClearance = 4 } = {}) {
+      const box = new THREE.Box3().setFromObject(world);
+      const floor = box.min.y;
+      const probe = new THREE.Raycaster();
+      probe.far = 140;
+
+      let best = null;
+      for (let ix = 1; ix < samples; ix++) {
+        for (let iz = 1; iz < samples; iz++) {
+          const x = THREE.MathUtils.lerp(box.min.x, box.max.x, ix / samples);
+          const z = THREE.MathUtils.lerp(box.min.z, box.max.z, iz / samples);
+
+          // Stand on the ground here, not at the model's lowest point: a
+          // block with any relief puts a fixed height underground.
+          probe.set(new THREE.Vector3(x, box.max.y + 5, z), new THREE.Vector3(0, -1, 0));
+          const ground = probe.intersectObject(world, true)[0];
+          if (!ground) continue;
+          const eye = new THREE.Vector3(x, ground.point.y + EYE_M, z);
+          if (eye.y - floor > 25) continue;      // stood on a roof, not a street
+
+          let nearest = Infinity, openest = null, openestDistance = -1;
+          for (let r = 0; r < rays; r++) {
+            const angle = (r / rays) * Math.PI * 2;
+            const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+            probe.set(eye, direction);
+            const hit = probe.intersectObject(world, true)[0];
+            const distance = hit ? hit.distance : probe.far;
+            if (distance < nearest) nearest = distance;
+            if (distance > openestDistance) { openestDistance = distance; openest = direction; }
+          }
+          if (nearest < minClearance) continue;
+          if (!best || nearest > best.clearance) {
+            best = { eye, clearance: nearest, along: openest };
+          }
+        }
+      }
+      if (!best) return null;
+
+      // Look along the street rather than at the wall behind you, and lift the
+      // aim a little so the frame carries roofline instead of only pavement.
+      const target = best.eye.clone()
+        .addScaledVector(best.along, Math.min(70, best.clearance * 3))
+        .setY(best.eye.y + 6);
+      this.look(best.eye.toArray(), target.toArray());
+      return { eye: best.eye.toArray(), clearance: best.clearance };
+    },
     setSun(elevation, bearing) {
       document.getElementById('sun').value = elevation;
       document.getElementById('bearing').value = bearing;
