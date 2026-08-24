@@ -216,6 +216,10 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
             "roof": program.params.get("roof", "flat"),
             "residual": None if program.residual is None else round(program.residual, 3),
         }
+        if program.params.get("source_id"):
+            # The register's id for this building, kept so the seed can be
+            # scored against the register it came from.
+            entry["source_id"] = program.params["source_id"]
         entry.update(_roof_form(ring, roofs_by_xy))
         seed.buildings.append(entry)
 

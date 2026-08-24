@@ -76,7 +76,10 @@ def test_footprint_layers_are_attributed_and_addressable():
         assert layer.service.startswith("https://")
         assert layer.attribution
         assert layer.license
-        assert isinstance(layer.layer, int)
+        # An ArcGIS FeatureServer addresses a layer by index, a WFS by
+        # typeName. Both are "which layer"; only one is a number.
+        assert isinstance(layer.layer, (int, str)) and str(layer.layer)
+        assert layer.kind in ("arcgis", "wfs")
 
 
 def test_point_in_polygon_matches_a_known_square():

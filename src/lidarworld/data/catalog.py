@@ -119,6 +119,59 @@ COMMERCIAL: dict[str, Source] = {s.id: s for s in [
         homepage="https://pnoa.ign.es/pnoa-lidar",
     ),
     Source(
+        id="ahn_geotiles",
+        name="AHN via GeoTiles (TU Delft) -- LAZ subtiles",
+        license="CC0 1.0 (public domain dedication)",
+        commercial=True,
+        attribution="AHN / Rijkswaterstaat; tiling by GeoTiles, TU Delft",
+        coverage="All of the Netherlands, AHN3/4/5, 1000 x 1250 m subtiles",
+        classified="Ground, building, vegetation, water at source; return "
+                   "number and intensity retained",
+        homepage="https://geotiles.citg.tudelft.nl/",
+        notes="The point cloud itself, cut small enough to download -- PDOK's "
+              "own ATOM service serves only the 0.5 m rasters. 23 pts/m2 over "
+              "central Amsterdam against 3DEP's 4, and CC0 rather than an "
+              "attribution licence. See data/ahn.py for the tile grid.",
+    ),
+    Source(
+        id="bag3d",
+        name="3D BAG",
+        license="CC BY 4.0",
+        commercial=True,
+        attribution="3D BAG by the TU Delft 3D geoinformation group",
+        coverage="Every building in the Netherlands, LoD1.2/1.3/2.2",
+        classified="Per-building roof height percentiles, ground level, roof type",
+        homepage="https://3dbag.nl/",
+        notes="An independently derived height per building. Independence 2, "
+              "not 3: different team and different pipeline, same AHN returns.",
+    ),
+    Source(
+        id="bgt",
+        name="Basisregistratie Grootschalige Topografie (BGT)",
+        license="CC BY 4.0 (public task data)",
+        commercial=True,
+        attribution="BGT, Kadaster / PDOK",
+        coverage="The Netherlands, surveyed large-scale base map",
+        classified="49 object collections: roads, water, buildings, individual "
+                   "trees, street furniture",
+        homepage="https://www.pdok.nl/introductie/-/article/basisregistratie-"
+                 "grootschalige-topografie-bgt-",
+        notes="Carries individual vegetation objects as points, which is the "
+              "tree ground truth the repo has never had.",
+    ),
+    Source(
+        id="nwb",
+        name="Nationaal Wegenbestand (NWB) Wegvakken",
+        license="CC BY 4.0",
+        commercial=True,
+        attribution="Rijkswaterstaat, via PDOK",
+        coverage="Every public road in the Netherlands, as centrelines in RD",
+        classified="Street name, maintaining authority, special-carriageway code",
+        homepage="https://www.pdok.nl/",
+        notes="No width and no functional class -- see topology/streets.py for "
+              "what is inferred from the authority code instead.",
+    ),
+    Source(
         id="co_hazard_mapping",
         name="Colorado Hazard Mapping Program LiDAR",
         license="State of Colorado open data (free download, no stated restriction)",
@@ -352,6 +405,34 @@ PLACES: dict[str, dict] = {
         "project": "CO_DRCOG_2020_B20",
         "crs": "EPSG:26913",
         "suggested_crop": (501000, 4398500, 501600, 4399100),
+    },
+    "amsterdam_grachtengordel": {
+        "source": "ahn_geotiles",
+        # No bbox query needed: the AHN grid is deterministic, so the place
+        # names the tile it wants and `fetch` resolves it arithmetically.
+        "grid": "ahn",
+        "version": "ahn5",
+        "bbox_wgs84": (4.885, 52.362, 4.905, 52.375),
+        "description": "Amsterdam canal belt: Herengracht to the Amstel. "
+                       "23 pts/m2, uniform 17th-century stock, dense grid.",
+        "crs": "EPSG:28992",
+        # Rembrandtplein and the Amstel bend, 400 m: canal frontage on three
+        # sides, which is the case footprint-driven grouping should be best at.
+        "suggested_crop": (121300, 486500, 121700, 486900),
+        "footprints": "amsterdam",
+        "streets": "amsterdam",
+    },
+    "amsterdam_centraal": {
+        "source": "ahn_geotiles",
+        "grid": "ahn",
+        "version": "ahn5",
+        "bbox_wgs84": (4.888, 52.375, 4.908, 52.385),
+        "description": "Amsterdam Centraal and the IJ waterfront. Water, rail "
+                       "and one very large roof.",
+        "crs": "EPSG:28992",
+        "suggested_crop": (121300, 487500, 121900, 488100),
+        "footprints": "amsterdam",
+        "streets": "amsterdam",
     },
     "manhattan_midtown": {
         "source": "usgs_3dep",

@@ -610,23 +610,51 @@ def _load_footprints(spec: str, world: World, cloud: PointCloud):
         raise ValueError("the source has no CRS, so its extent cannot be converted "
                          "to WGS84 to request footprints. Pass a GeoJSON path instead.")
 
+    west, south, east, north = _extent_in(world, cloud, layer.default_crs)
+
+    # Ask in the layer's own frame and reproject here rather than scraping an EPSG code out of
+    # the WKT: a compound CRS ends with its *vertical* datum, so asking the
+    # server for "the last EPSG code" quietly returns nothing. The output frame
+    # is the layer's own, which for a Dutch build is already RD New.
+    geojson = fetch_footprints(layer, (west, south, east, north),
+                               in_crs=layer.default_crs,
+                               out_crs=layer.default_crs)
+    rings = _to_world(polygons(geojson), layer.default_crs, world)
+    return rings, attributes(geojson, layer)
+
+
+def _extent_in(world, cloud, crs: str):
+    """The compiled extent as a bbox in EPSG:`crs`.
+
+    Requesting in the layer's own frame rather than WGS84 is not an
+    optimisation. WFS 2.0 with a URN-form CRS honours the authority's axis
+    order, and EPSG:4326's authority order is latitude first -- so a bbox
+    written west, south, east, north is read as a square in the Indian Ocean
+    and the server answers 200 with an empty collection. Asking in a projected
+    frame sidesteps the axis-order question, and for a Dutch build RD New is
+    the frame the returns are already in.
+    """
+    from pyproj import Transformer
+
     lo, hi = cloud.bounds
     lo = lo[:2] + world.origin[:2]
     hi = hi[:2] + world.origin[:2]
-    to_wgs = Transformer.from_crs(world.crs, "EPSG:4326", always_xy=True)
-    west, south = to_wgs.transform(lo[0], lo[1])
-    east, north = to_wgs.transform(hi[0], hi[1])
+    transformer = Transformer.from_crs(world.crs, f"EPSG:{crs}", always_xy=True)
+    west, south = transformer.transform(lo[0], lo[1])
+    east, north = transformer.transform(hi[0], hi[1])
+    return west, south, east, north
 
-    # Request WGS84 and reproject here rather than scraping an EPSG code out of
-    # the WKT: a compound CRS ends with its *vertical* datum, so asking the
-    # server for "the last EPSG code" quietly returns nothing.
-    geojson = fetch_footprints(layer, (west, south, east, north), out_crs="4326")
-    from_wgs = Transformer.from_crs("EPSG:4326", world.crs, always_xy=True)
-    rings = []
-    for ring in polygons(geojson):
-        x, y = from_wgs.transform(ring[:, 0], ring[:, 1])
-        rings.append(np.column_stack([x, y]))
-    return rings, attributes(geojson, layer)
+
+def _to_world(rings, from_crs: str, world) -> list:
+    """Reproject fetched geometry into the world frame."""
+    from pyproj import Transformer
+
+    transformer = Transformer.from_crs(f"EPSG:{from_crs}", world.crs, always_xy=True)
+    out = []
+    for ring in rings:
+        x, y = transformer.transform(ring[:, 0], ring[:, 1])
+        out.append(np.column_stack([x, y]))
+    return out
 
 
 def _apply_streets(spec: str, world, cloud, raster, class_raster) -> dict:
@@ -634,42 +662,30 @@ def _apply_streets(spec: str, world, cloud, raster, class_raster) -> dict:
     footprints: a local GeoJSON, or a named municipal service."""
     import json
 
-    from .data import denver as denver_data
     from .topology import streets as street_stage
 
     path = Path(spec)
     if path.exists():
         geojson = json.loads(path.read_text())
+        source_crs = None
     else:
-        if spec not in ("denver",):
-            raise ValueError(f"unknown street source {spec!r}; have 'denver' or "
-                             "a path to GeoJSON")
-        from pyproj import Transformer
-        lo, hi = cloud.bounds
-        lo = lo[:2] + world.origin[:2]
-        hi = hi[:2] + world.origin[:2]
-        to_wgs = Transformer.from_crs(world.crs, "EPSG:4326", always_xy=True)
-        west, south = to_wgs.transform(lo[0], lo[1])
-        east, north = to_wgs.transform(hi[0], hi[1])
-        import urllib.request
-        url = denver_data.query_url(denver_data.LAYERS["street_centerlines"],
-                                    (west, south, east, north), out_crs="4326")
-        request = urllib.request.Request(url, headers={"User-Agent": "lidarworld/0.1"})
-        with urllib.request.urlopen(request, timeout=180) as response:
-            geojson = json.load(response)
+        from .data.gis import STREETS, fetch_streets
+
+        if spec not in STREETS:
+            raise ValueError(f"unknown street source {spec!r}; "
+                             f"have {sorted(STREETS)} or a path to GeoJSON")
+        layer = STREETS[spec]
+        bbox = _extent_in(world, cloud, layer.default_crs)
+        geojson = fetch_streets(layer, bbox, in_crs=layer.default_crs,
+                                out_crs=layer.default_crs)
+        source_crs = layer.default_crs
 
     lines = street_stage.polylines(geojson)
     half = street_stage.widths(geojson)
     if len(half) != len(lines):
         half = [5.5] * len(lines)
-    if not path.exists():
-        from pyproj import Transformer
-        from_wgs = Transformer.from_crs("EPSG:4326", world.crs, always_xy=True)
-        converted = []
-        for line in lines:
-            x, y = from_wgs.transform(line[:, 0], line[:, 1])
-            converted.append(np.column_stack([x, y]))
-        lines = converted
+    if source_crs is not None:
+        lines = _to_world(lines, source_crs, world)
     lines = [line - world.origin[:2] for line in lines]
 
     # The seed wants the network itself, not the raster: a centreline and a

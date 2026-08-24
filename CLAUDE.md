@@ -139,12 +139,17 @@ src/lidarworld/
                 program.py: generative programs + their measured residual,
                 seed.py: the World Seed a generator expands into a place
   data/         source catalogue, tile fetcher, header-only tile index,
+                ahn.py: the AHN/GeoTiles subtile grid, derived from LAS headers;
+                amsterdam.py: acquisition manifest -- 23 pts/m2 under CC0, an
+                independent height per building, and every street tree surveyed,
                 textures.py: CC0 material libraries with their terms and each
                 texture's published real-world size,
                 catalog_index.py: published extents -> download URLs,
                 denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
+docs/AMSTERDAM.md
+                the best city available: what compiled, and the two scores
 docs/GENERATED_FACADES.md
                 why the scan cannot be the surface, and what is built instead
 viewer/         dependency-free WebGL2 walkthrough
@@ -159,6 +164,8 @@ python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
 lidarworld fetch denver_lodo -o data/real     # pull a real 3DEP tile
+lidarworld fetch amsterdam_grachtengordel -o data/real   # 23 pts/m2, CC0
+python tools/amsterdam_check.py build/ams/real.seed.json # trees, heights
 lidarworld tiles data/real --area x,y,size    # header-only index; what covers this?
 lidarworld tiles . --remote --area=lon,lat,deg # what to DOWNLOAD; 6,505 Denver tiles
 lidarworld compile data/real --area x,y,size -o build/x \
@@ -198,7 +205,14 @@ Ranked by how much they hurt, which is roughly the order to fix them.
    ~4 pts/m2 from above, two thirds of it on pavement, so facades are absent
    rather than sparse. `--footprints <id>` extrudes them from the footprint to
    the measured roof height. Denver went from 50 walls to 872.
-6. ~~**Vegetation over-segments.**~~ Fixed. Was 1197 "trees" in a 300 m Denver
+6. **Vegetation over-segments, by 6.8x, and that is now measured.** Amsterdam's
+   BGT surveys every public tree as a point: a 400 m canal-belt block has 183 of
+   them and the compiler produced 1243, with 790 of those more than 15 m from
+   any surveyed tree and a median nearest-real-tree distance of 24 m. BGT covers
+   the public realm only, so private courtyard trees inflate the ratio -- but not
+   by a factor of six. `tools/amsterdam_check.py` is the scoreboard; move it.
+   The earlier round of fixes below was real and did not finish the job:
+   ~~Fixed.~~ Was 1197 "trees" in a 300 m Denver
    block with a 74 m maximum; now 307 with a 28.9 m maximum. Three causes, all
    real: return number was discarded at ingest (it is *the* canopy discriminator
    -- roof 9.3% multi-return vs scatter 70.7%), the CHM was unsmoothed with a
@@ -223,7 +237,9 @@ Ranked by how much they hurt, which is roughly the order to fix them.
     the wall is flat to 0.044 m locally against a 0.05 m window reveal. The
     median of 48 bays carries *half* the detail of one bay -- the smearing is
     correlated across bays because they share look angles, and a vote only
-    removes independent damage. `docs/GENERATED_FACADES.md` has the numbers and
+    removes independent damage. `docs/AMSTERDAM.md
+                the best city available: what compiled, and the two scores
+docs/GENERATED_FACADES.md` has the numbers and
     the three failed attempts. The macro supplies identity (colour, extent,
     rhythm, height); structure is generated or matched from a CC0 library.
 11. **The software renderer is currently the largest source of "it looks bad".**

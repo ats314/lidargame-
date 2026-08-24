@@ -107,12 +107,18 @@ class TileIndex:
             except (json.JSONDecodeError, TypeError, KeyError):
                 pass
 
+        # Match on the lowercased suffix rather than globbing the pattern
+        # directly: rglob is case-sensitive on Linux and GeoTiles serves
+        # `25GN1_02.LAZ`, so a case-sensitive walk reports an empty directory
+        # that visibly has a 240 MB tile sitting in it.
+        suffixes = {Path(pattern).suffix.lower() for pattern in patterns}
         tiles = []
-        for pattern in patterns:
-            for path in sorted(root.rglob(pattern)):
-                record = read_header(path)
-                if record is not None:
-                    tiles.append(record)
+        for path in sorted(root.rglob("*")):
+            if path.suffix.lower() not in suffixes or not path.is_file():
+                continue
+            record = read_header(path)
+            if record is not None:
+                tiles.append(record)
         index = cls(tiles, root)
         if use_cache and tiles:
             cache.write_text(json.dumps({"tiles": [asdict(t) for t in tiles]}, indent=1))
