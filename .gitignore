@@ -8,8 +8,13 @@
 # The manifest is the record -- which material, its licence, its real-world size.
 /data/textures/*
 !/data/textures/manifest.json
+# GeoTiles serves uppercase .LAZ, and git patterns are case-sensitive on
+# Linux. The same trap already cost a run once: TileIndex globbed *.laz
+# and reported a directory holding a 240 MB tile as empty.
 *.laz
+*.LAZ
 *.las
+*.LAS
 *.part
 /build/
 /viewer/world/
