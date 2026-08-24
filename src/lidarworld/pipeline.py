@@ -463,6 +463,7 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                                "shape": [raster.nx, raster.ny]}),
             attrs={"cell": raster.cell, "method": cloud.meta.get("dtm_method", "")}))
         node_slots = ["terrain"]
+        glazed = 0
         quads = mesh_stage.add_terrain(
             builder, raster, dtm, class_raster, terrain_ctx,
             terrain_stage.ROLE_LOOKUP, 0, mask=class_raster != terrain_stage.VOID)
@@ -523,6 +524,7 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                        **patch.attrs},
                 tags=["street_facing"] if patch.attrs.get("street_facing") else []))
             quads += mesh_stage.add_lattice(builder, patch, lat, node_index)
+            glazed += mesh_stage.add_glazing(builder, patch, lat, node_index)
 
             for opening in lat.openings:
                 oid = f"{sid}/opening.{opening.id:02d}"
@@ -555,7 +557,8 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
         world.put_array("terrain/dtm", np.nan_to_num(dtm, nan=0.0).astype(np.float32))
         world.put_array("terrain/class", class_raster.astype(np.uint8))
         world.put_array("terrain/context", terrain_ctx.astype(np.uint32))
-        rec.notes = (f"{quads:,} merged quads, {len(arrays['positions']):,} vertices, "
+        rec.notes = (f"{quads:,} merged quads ({glazed:,} glazed openings), "
+                     f"{len(arrays['positions']):,} vertices, "
                      f"{len(arrays['indices']):,} triangles")
     _log(config, rec.notes)
 
