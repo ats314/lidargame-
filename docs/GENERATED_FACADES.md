@@ -133,10 +133,19 @@ python tools/textured_wall.py       # one wall, close enough to judge
 python tools/texture_match.py       # CC0 ingest, match, apply
 ```
 
+## Per-building variation
+
+`reconstruct/vary.py` jitters each building's DNA within the measurement's own
+uncertainty — bay width ±12%, storey height ±8%, window proportions ±15%/±10%,
+colour ±0.04 per channel. The budget is not arbitrary: the lattice correlation
+was 0.44, so this much variation is indistinguishable from remeasuring. A block
+of eight buildings now reads as a neighbourhood, not a stamp.
+
 ## Not done
 
-- The matched CC0 material is not yet wired into `build_elevation.py`, which
-  still bakes procedural `stone_block`.
+- ~~The matched CC0 material is not yet wired into `build_elevation.py`.~~
+  Done: `--match-material` (the default) applies the winner to wall, plinth,
+  string, cornice and reveal surfaces.
 - The ground plane exports but does not draw, so the block floats.
 - Hipped roof caps are degenerate quads standing in for triangles.
 - The software renderer point-samples with no mipmap, so masonry moirés at
