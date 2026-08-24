@@ -262,8 +262,8 @@
     0.75,
     0.85
    ],
-   "opacity": 0.4,
-   "roughness": 0.1,
+   "opacity": 1.0,
+   "roughness": 0.08,
    "scale": 1.0,
    "license": "Proprietary - All Rights Reserved"
   },

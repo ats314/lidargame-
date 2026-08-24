@@ -40,6 +40,24 @@ STOREY_M = 3.8
 #: overrun. Glazing them is what makes a block look like a doll's house.
 MIN_FACADE_M = (3.0, 4.0)           # width, height
 
+#: Plot rhythm. Narrow enough for a canal house, wide enough for a warehouse
+#: frontage; the per-building draw inside this range is what varies a terrace.
+BAY_M = (3.6, 5.8)
+
+#: How much of a bay is glass. Masonry stock is mostly wall.
+GLASS_FRACTION = (0.26, 0.38)
+
+#: Nothing above the ground floor gets wider than this, however wide the bay
+#: is. A domestic window tops out near here in every masonry city; letting it
+#: scale with the plot is what produced showroom glazing on a canal house.
+UPPER_WINDOW_MAX_M = 1.9
+
+#: A shopfront is genuinely wider and taller than a window above it, and the
+#: difference at street level is most of what a walker reads.
+GROUND_WINDOW_MAX_M = 2.8
+
+WINDOW_H_M = (1.5, 2.1)
+
 
 def _seed_of(*parts) -> int:
     """A seed that survives the process it was made in.
@@ -82,10 +100,15 @@ def fenestrate(lattice: TileLattice, patch, *, key=None,
     # A window every 3 m on every wall of every building reads as a
     # spreadsheet, not a street. Varying the bay per building is most of what
     # stops a row of blocks looking stamped.
-    bay_m = float(rng.uniform(4.2, 7.0))
-    glass_fraction = float(rng.uniform(0.30, 0.45))
-    win_w = max(2, int(round(bay_m * glass_fraction / cell)))
-    win_h = max(2, int(round(rng.uniform(1.5, 2.1) / cell)))
+    bay_m = float(rng.uniform(*BAY_M))
+    glass_fraction = float(rng.uniform(*GLASS_FRACTION))
+    # Capped, not just scaled. The first version derived width from the bay
+    # alone, so a wide bay produced a 3 m opening on every storey and an
+    # Amsterdam canal house came out glazed like a car showroom. Above the
+    # ground floor a window is a window whatever the plot is worth.
+    width_m = min(bay_m * glass_fraction, UPPER_WINDOW_MAX_M)
+    win_w = max(2, int(round(width_m / cell)))
+    win_h = max(2, int(round(rng.uniform(*WINDOW_H_M) / cell)))
     pitch = max(win_w + 2, int(round(bay_m / cell)))
     if pitch >= nu:
         return 0
@@ -103,10 +126,14 @@ def fenestrate(lattice: TileLattice, patch, *, key=None,
         if top_v >= nv - 1:
             break
 
-        for u0 in range(margin, nu - win_w, pitch):
+        # The ground floor is a shopfront: wider, taller, and starting lower.
+        storey_w = win_w if storey else max(
+            win_w, min(int(round(GROUND_WINDOW_MAX_M / cell)), pitch - 2))
+
+        for u0 in range(margin, nu - storey_w, pitch):
             if storey and rng.random() < 0.10:
                 continue            # a blank bay; perfect regularity reads as CGI
-            u1, v0, v1 = u0 + win_w, sill_v, top_v
+            u1, v0, v1 = u0 + storey_w, sill_v, top_v
             occupancy[u0:u1, v0:v1] = 0
             # The reveal, so a theme can put a surround or a lintel on it.
             context[max(0, u0 - 1):min(nu, u1 + 1),
@@ -125,7 +152,7 @@ def fenestrate(lattice: TileLattice, patch, *, key=None,
                 uv_min=(float(uv_min[0] + u0 * cell), float(uv_min[1] + v0 * cell)),
                 uv_max=(float(uv_min[0] + u1 * cell), float(uv_min[1] + v1 * cell)),
                 center_world=patch.unproject(centre_uv)[0],
-                width=float(win_w * cell), height=float((v1 - v0) * cell),
+                width=float((u1 - u0) * cell), height=float((v1 - v0) * cell),
                 sill_height=float(sill_m),
                 # Not the detector's fill-ratio confidence. Nothing was
                 # measured, so this is the confidence that a building of this

@@ -283,7 +283,8 @@ new GLTFLoader().load(MODEL, (gltf) => {
      * the cell furthest from anything. One pass over the vertices, and the
      * answer is the same one the rays would have given.
      */
-    findStreet({ cellM = 2.0, bandM = [1.0, 4.0] } = {}) {
+    findStreet({ cellM = 2.0, bandM = [1.0, 4.0],
+                 minClearanceM = 3.0, maxClearanceM = 18.0 } = {}) {
       const box = new THREE.Box3().setFromObject(world);
       const floor = box.min.y;
       const nx = Math.max(8, Math.ceil((box.max.x - box.min.x) / cellM));
@@ -326,17 +327,35 @@ new GLTFLoader().load(MODEL, (gltf) => {
         if (x < nx - 1 && z < nz - 1) relax(i, i + nx + 1, 1.41421);
       }
 
-      // Inset, because the most open place in any tile is the empty ground
-      // past its edge, and standing there frames nothing.
-      const inset = Math.ceil(20 / cellM);
-      let bestIndex = -1, bestDistance = -1;
-      for (let z = inset; z < nz - inset; z++) for (let x = inset; x < nx - inset; x++) {
+      // A street is open *and enclosed*. Maximising openness alone picks the
+      // empty ground past the edge of the block and renders a photograph of a
+      // field -- which is exactly what the first version did, reporting 118 m
+      // of clearance and framing nothing.
+      //
+      // So: keep only cells whose clearance is street-sized, and among those
+      // take the one deepest inside the built-up area, measured from the
+      // centroid of everything that is blocked.
+      let sumX = 0, sumZ = 0, count = 0;
+      for (let i = 0; i < blocked.length; i++) {
+        if (!blocked[i]) continue;
+        sumX += i % nx; sumZ += Math.floor(i / nx); count++;
+      }
+      if (!count) return null;
+      const coreX = sumX / count, coreZ = sumZ / count;
+
+      const minCells = minClearanceM / cellM, maxCells = maxClearanceM / cellM;
+      let bestIndex = -1, bestScore = Infinity;
+      for (let z = 0; z < nz; z++) for (let x = 0; x < nx; x++) {
         const i = z * nx + x;
-        if (distance[i] > bestDistance && distance[i] < far) {
-          bestDistance = distance[i]; bestIndex = i;
-        }
+        const d = distance[i];
+        if (d < minCells || d > maxCells) continue;
+        // Distance from the core, less a small bonus for standing in the
+        // wider part of a street rather than pressed against a wall.
+        const score = Math.hypot(x - coreX, z - coreZ) - d * 1.5;
+        if (score < bestScore) { bestScore = score; bestIndex = i; }
       }
       if (bestIndex < 0) return null;
+      const bestDistance = distance[bestIndex];
 
       const gx = bestIndex % nx, gz = Math.floor(bestIndex / nx);
       const x = box.min.x + (gx + 0.5) * cellM;

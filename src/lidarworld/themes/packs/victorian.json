@@ -208,9 +208,9 @@
     0.3,
     0.33
    ],
-   "roughness": 0.1,
+   "roughness": 0.08,
    "metallic": 0.0,
-   "opacity": 0.55,
+   "opacity": 1.0,
    "scale": 1.2,
    "tags": [
     "glazing"

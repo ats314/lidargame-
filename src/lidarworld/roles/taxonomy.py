@@ -129,6 +129,18 @@ class Ctx:
     SHELTERED = 1 << 17     # under an overhang -> weathering rules differ
     SPARSE_EVIDENCE = 1 << 18   # reconstructed from few points; low confidence
     OCCLUDED = 1 << 19      # inferred, never directly observed by the sensor
+    # Two bits of "which building is this", and nothing more. A street where
+    # every frontage resolves to the same material reads as one continuous
+    # wall rather than as a terrace, and that is most of what makes a
+    # generated block look generated.
+    #
+    # Deliberately meaningless: the IR says building 7 is variant 2 of 4, and
+    # the theme decides whether variant 2 is weathered brick, render or
+    # stone. Encoding the *style* here instead -- or smuggling it through an
+    # evidence flag, which the seed generator does -- would put appearance in
+    # the IR and break the invariant that makes a re-skin a lookup.
+    VARIANT_LOW = 1 << 20
+    VARIANT_HIGH = 1 << 21
 
     NAMES = {
         1 << 0: "occupied", 1 << 1: "edge_u_min", 1 << 2: "edge_u_max",
@@ -138,6 +150,7 @@ class Ctx:
         1 << 12: "adj_perpendicular", 1 << 13: "adj_roof", 1 << 14: "adj_coplanar",
         1 << 15: "interior", 1 << 16: "street_facing", 1 << 17: "sheltered",
         1 << 18: "sparse_evidence", 1 << 19: "occluded",
+        1 << 20: "variant_low", 1 << 21: "variant_high",
     }
 
     BY_NAME = {v: k for k, v in NAMES.items()}

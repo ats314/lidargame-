@@ -302,6 +302,8 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
                 if config.generate_openings:
                     generated_openings += fenestrate_stage.fenestrate(
                         lat, patch, key=patch.attrs.get("building") or patch.id)
+                lattice_stage.stamp_variant(
+                    lat, patch.attrs.get("building") or patch.id)
                 if free is not None:
                     cleared, rejected = freespace.gate_lattice(lat, patch, free)
                     gated_cells += cleared

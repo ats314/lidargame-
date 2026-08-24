@@ -19,6 +19,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+import zlib
+
 import numpy as np
 
 from ..roles.taxonomy import Ctx
@@ -456,6 +458,29 @@ def _door_notches(solid: np.ndarray, cell: float, *, min_width: float, max_width
             notches.append((start, u + 1, base, top))
         u += 1
     return notches
+
+
+def stamp_variant(lattice: TileLattice, key) -> int:
+    """Mark every cell of one surface with which building it belongs to.
+
+    Two bits, meaning nothing but "these buildings are not the same one". A
+    theme binds a different material to each, so a terrace stops resolving to
+    one continuous brick wall -- which is most of what makes a generated
+    street look generated.
+
+    crc32 rather than hash(): hash() is salted per interpreter for strings, so
+    a building keyed by its register id would land in a different variant on
+    every run and the same seed would not rebuild the same street.
+    """
+    variant = zlib.crc32(str(key).encode()) & 0b11
+    bits = 0
+    if variant & 0b01:
+        bits |= int(Ctx.VARIANT_LOW)
+    if variant & 0b10:
+        bits |= int(Ctx.VARIANT_HIGH)
+    if bits:
+        lattice.context |= np.uint32(bits)
+    return variant
 
 
 def build_solid(patch, width: float, height: float, *, cell: float = 0.25,
