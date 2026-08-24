@@ -270,61 +270,98 @@ new GLTFLoader().load(MODEL, (gltf) => {
      * A standing spot with room around it, and something to look at.
      *
      * Fixed camera offsets from the model centre are tuned to one block and
-     * wrong for the next: the Denver poses put the lens flat against a facade,
-     * and the same happened to the other viewer's poses on Amsterdam. A street
-     * is not at a known offset, but it is findable -- it is the place with the
-     * most clearance around it.
+     * wrong for the next: the Denver poses put the lens flat against an
+     * Amsterdam facade. A street is not at a known offset, but it is
+     * findable -- it is the place with the most clearance around it.
      *
-     * Samples a grid at eye height, casts a ring of rays from each candidate,
-     * and keeps the one whose *nearest* obstruction is furthest away. Then it
-     * aims at the closest thing tall enough to be a building, so the frame has
-     * a subject rather than a vanishing point.
+     * Done by rasterising rather than raycasting. The obvious implementation
+     * casts a ring of rays from a grid of candidates, and that is thousands of
+     * rays against a mesh with no BVH -- 1.6 million triangles times a few
+     * thousand rays does not finish, which is how the first version of this
+     * hung a render. Instead: project every vertex sitting in the band a
+     * person occupies into a coarse 2D grid, distance-transform it, and take
+     * the cell furthest from anything. One pass over the vertices, and the
+     * answer is the same one the rays would have given.
      */
-    findStreet({ samples = 14, rays = 12, minClearance = 4 } = {}) {
+    findStreet({ cellM = 2.0, bandM = [1.0, 4.0] } = {}) {
       const box = new THREE.Box3().setFromObject(world);
       const floor = box.min.y;
-      const probe = new THREE.Raycaster();
-      probe.far = 140;
+      const nx = Math.max(8, Math.ceil((box.max.x - box.min.x) / cellM));
+      const nz = Math.max(8, Math.ceil((box.max.z - box.min.z) / cellM));
+      const blocked = new Uint8Array(nx * nz);
 
-      let best = null;
-      for (let ix = 1; ix < samples; ix++) {
-        for (let iz = 1; iz < samples; iz++) {
-          const x = THREE.MathUtils.lerp(box.min.x, box.max.x, ix / samples);
-          const z = THREE.MathUtils.lerp(box.min.z, box.max.z, iz / samples);
+      // Terrain sits below the band and roofs above it, so both drop out
+      // without either having to be identified.
+      const low = floor + bandM[0], high = floor + bandM[1];
+      const point = new THREE.Vector3();
+      world.traverse((node) => {
+        const position = node.isMesh && node.geometry && node.geometry.attributes.position;
+        if (!position) return;
+        for (let i = 0; i < position.count; i++) {
+          point.fromBufferAttribute(position, i).applyMatrix4(node.matrixWorld);
+          if (point.y < low || point.y > high) continue;
+          const ix = Math.floor((point.x - box.min.x) / cellM);
+          const iz = Math.floor((point.z - box.min.z) / cellM);
+          if (ix >= 0 && ix < nx && iz >= 0 && iz < nz) blocked[iz * nx + ix] = 1;
+        }
+      });
 
-          // Stand on the ground here, not at the model's lowest point: a
-          // block with any relief puts a fixed height underground.
-          probe.set(new THREE.Vector3(x, box.max.y + 5, z), new THREE.Vector3(0, -1, 0));
-          const ground = probe.intersectObject(world, true)[0];
-          if (!ground) continue;
-          const eye = new THREE.Vector3(x, ground.point.y + EYE_M, z);
-          if (eye.y - floor > 25) continue;      // stood on a roof, not a street
+      // Chamfer distance transform, forward then backward. Units are cells.
+      const far = nx + nz;
+      const distance = new Float32Array(nx * nz).fill(far);
+      for (let i = 0; i < blocked.length; i++) if (blocked[i]) distance[i] = 0;
+      const relax = (i, j, cost) => {
+        if (distance[j] + cost < distance[i]) distance[i] = distance[j] + cost;
+      };
+      for (let z = 0; z < nz; z++) for (let x = 0; x < nx; x++) {
+        const i = z * nx + x;
+        if (x > 0) relax(i, i - 1, 1);
+        if (z > 0) relax(i, i - nx, 1);
+        if (x > 0 && z > 0) relax(i, i - nx - 1, 1.41421);
+      }
+      for (let z = nz - 1; z >= 0; z--) for (let x = nx - 1; x >= 0; x--) {
+        const i = z * nx + x;
+        if (x < nx - 1) relax(i, i + 1, 1);
+        if (z < nz - 1) relax(i, i + nx, 1);
+        if (x < nx - 1 && z < nz - 1) relax(i, i + nx + 1, 1.41421);
+      }
 
-          let nearest = Infinity, openest = null, openestDistance = -1;
-          for (let r = 0; r < rays; r++) {
-            const angle = (r / rays) * Math.PI * 2;
-            const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-            probe.set(eye, direction);
-            const hit = probe.intersectObject(world, true)[0];
-            const distance = hit ? hit.distance : probe.far;
-            if (distance < nearest) nearest = distance;
-            if (distance > openestDistance) { openestDistance = distance; openest = direction; }
-          }
-          if (nearest < minClearance) continue;
-          if (!best || nearest > best.clearance) {
-            best = { eye, clearance: nearest, along: openest };
-          }
+      // Inset, because the most open place in any tile is the empty ground
+      // past its edge, and standing there frames nothing.
+      const inset = Math.ceil(20 / cellM);
+      let bestIndex = -1, bestDistance = -1;
+      for (let z = inset; z < nz - inset; z++) for (let x = inset; x < nx - inset; x++) {
+        const i = z * nx + x;
+        if (distance[i] > bestDistance && distance[i] < far) {
+          bestDistance = distance[i]; bestIndex = i;
         }
       }
-      if (!best) return null;
+      if (bestIndex < 0) return null;
 
-      // Look along the street rather than at the wall behind you, and lift the
-      // aim a little so the frame carries roofline instead of only pavement.
-      const target = best.eye.clone()
-        .addScaledVector(best.along, Math.min(70, best.clearance * 3))
-        .setY(best.eye.y + 6);
-      this.look(best.eye.toArray(), target.toArray());
-      return { eye: best.eye.toArray(), clearance: best.clearance };
+      const gx = bestIndex % nx, gz = Math.floor(bestIndex / nx);
+      const x = box.min.x + (gx + 0.5) * cellM;
+      const z = box.min.z + (gz + 0.5) * cellM;
+
+      // Ground under the spot, raycast once. A fixed height puts the camera
+      // underground on any block with relief.
+      const probe = new THREE.Raycaster();
+      probe.set(new THREE.Vector3(x, box.max.y + 5, z), new THREE.Vector3(0, -1, 0));
+      const ground = probe.intersectObject(world, true)[0];
+      const eyeY = (ground ? ground.point.y : floor) + EYE_M;
+
+      // Aim along the gradient of the distance field, which runs down the
+      // street rather than into the wall behind you.
+      const at = (ix, iz) => distance[Math.min(nz - 1, Math.max(0, iz)) * nx
+                                     + Math.min(nx - 1, Math.max(0, ix))];
+      const along = new THREE.Vector3(at(gx + 1, gz) - at(gx - 1, gz), 0,
+                                      at(gx, gz + 1) - at(gx, gz - 1));
+      if (along.lengthSq() < 1e-6) along.set(1, 0, 0);
+      along.normalize();
+
+      const eye = new THREE.Vector3(x, eyeY, z);
+      const target = eye.clone().addScaledVector(along, 60).setY(eyeY + 6);
+      this.look(eye.toArray(), target.toArray());
+      return { eye: eye.toArray(), clearanceM: bestDistance * cellM };
     },
     setSun(elevation, bearing) {
       document.getElementById('sun').value = elevation;

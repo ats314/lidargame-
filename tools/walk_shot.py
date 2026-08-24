@@ -119,7 +119,7 @@ def main() -> int:
                         if spot is None:
                             print("  no open standing spot found; skipping")
                             continue
-                        print(f"  found a spot with {spot['clearance']:.1f} m clearance")
+                        print(f"  found a spot with {spot['clearanceM']:.1f} m clearance")
                         page.wait_for_timeout(900)
                         path = out / f"{light}-found.png"
                         page.screenshot(path=str(path))
