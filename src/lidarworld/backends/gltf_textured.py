@@ -69,10 +69,12 @@ class Face:
 #: style. These are neutral greys chosen so an untextured surface is obviously
 #: untextured in a render rather than blending into a textured one.
 FALLBACK = {
-    "wall":   (0.72, 0.70, 0.67, 1.0),
-    "roof":   (0.45, 0.42, 0.40, 1.0),
-    "ground": (0.55, 0.55, 0.53, 1.0),
-    "":       (0.60, 0.60, 0.60, 1.0),
+    "wall":    (0.72, 0.70, 0.67, 1.0),
+    "roof":    (0.45, 0.42, 0.40, 1.0),
+    "ground":  (0.55, 0.55, 0.53, 1.0),
+    "foliage": (0.22, 0.38, 0.18, 1.0),
+    "trunk":   (0.32, 0.22, 0.14, 1.0),
+    "":        (0.60, 0.60, 0.60, 1.0),
 }
 
 

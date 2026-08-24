@@ -131,6 +131,7 @@ src/lidarworld/
                 elevation.py: build a clean facade from measured numbers --
                 openings with real reveals, plinth, cornice, sills, roof;
                 vary.py: per-building DNA jitter within measurement uncertainty
+                trees.py: street tree placement along building frontages
   topology/     relations, building grouping, street frontage
   themes/       packs, resolver, procedural texture backend
   backends/     web, glTF, CityJSON  <- the only place materials exist
@@ -153,7 +154,7 @@ viewer/         dependency-free WebGL2 walkthrough
 
 ```bash
 pip install -e ".[dev,laz]"
-python -m pytest tests/ -q                    # 385 tests, ~10s
+python -m pytest tests/ -q                    # 397 tests, ~10s
 python spec/benchmark/smoke_test.py           # spec conformance
 
 lidarworld sources                            # what is commercial-use clear
