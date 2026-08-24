@@ -178,6 +178,10 @@ docs/           IR schema, architecture, themes, prior art, data sources
 
 Related work this builds on and where it sits — MIT SPARK's Hydra, TU Delft's City3D, OGC CityGML, Esri CityEngine, NVIDIA RTX LiDAR, Cesium 3D Tiles — is mapped in [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
+A separate product — several consumer LiDAR phones around a physical tabletop, fused
+into one persistent semantic twin — is designed in [docs/tabletop/](docs/tabletop/).
+Design only, nothing measured, and deliberately not coupled to this compiler.
+
 The sensor, dataset, algorithm and tool index the viewer ships with is generated from [szenergy/awesome-lidar](https://github.com/szenergy/awesome-lidar); see [docs/RESOURCES.md](docs/RESOURCES.md).
 
 ## Licence
