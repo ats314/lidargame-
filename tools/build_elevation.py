@@ -40,6 +40,7 @@ from lidarworld.features import openings as openings_mod      # noqa: E402
 from lidarworld.features import repair as repair_mod          # noqa: E402
 from lidarworld.ingest import citygml, objmesh                # noqa: E402
 from lidarworld.reconstruct import elevation                  # noqa: E402
+from lidarworld.reconstruct import trees as trees_mod         # noqa: E402
 from lidarworld.reconstruct import vary as vary_mod           # noqa: E402
 from lidarworld.semantics import transfer                     # noqa: E402
 
@@ -83,6 +84,10 @@ def main() -> int:
                     help="jitter each building's DNA for variety")
     ap.add_argument("--no-vary", dest="vary", action="store_false")
     ap.add_argument("--vary-strength", type=float, default=1.0)
+    ap.add_argument("--trees", dest="trees", action="store_true", default=True,
+                    help="place street trees along building frontages")
+    ap.add_argument("--no-trees", dest="trees", action="store_false")
+    ap.add_argument("--tree-spacing", type=float, default=12.0)
     ap.add_argument("-o", "--out", default="build/helsinki/elevation.gltf")
     args = ap.parse_args()
 
@@ -255,16 +260,59 @@ def main() -> int:
               f"{' (varied)' if args.vary else ''}", flush=True)
 
     # Ground, so the block is standing on something rather than in space.
+    # Textured instead of flat colour, because a grey rectangle under a textured
+    # building reads as a rendering bug rather than as ground.
     if faces:
         pts = np.vstack([f.ring for f in faces])
         pad = 22.0
         lo2, hi2 = pts[:, :2].min(axis=0) - pad, pts[:, :2].max(axis=0) + pad
         z = float(np.percentile(pts[:, 2], 1)) - 0.15
+        ground_tile_m = 4.0         # one repeat covers 4 metres of pavement
+        ground_path = out_dir / "tile_ground.png"
+        bake("cobble", ground_tile_m, (0.38, 0.37, 0.36),
+             px_per_m=args.tile_px_per_m, seed=17, out=ground_path)
+        ground_ring = np.array([[lo2[0], lo2[1], z], [hi2[0], lo2[1], z],
+                                [hi2[0], hi2[1], z], [lo2[0], hi2[1], z]])
         faces.append(gltf_textured.Face(
-            ring=np.array([[lo2[0], lo2[1], z], [hi2[0], lo2[1], z],
-                           [hi2[0], hi2[1], z], [lo2[0], hi2[1], z]]),
+            ring=ground_ring,
+            uv=uv_for(ground_ring, ground_tile_m),
+            image=ground_path.name,
             kind="ground", surface_id="ground"))
-        gltf_textured.FALLBACK["ground"] = (0.30, 0.30, 0.31, 1.0)
+        print(f"  ground {(hi2[0]-lo2[0]):.0f} x {(hi2[1]-lo2[1]):.0f} m "
+              f"at z={z:.1f}", flush=True)
+
+    # Street trees along building frontages.
+    tree_count = 0
+    if args.trees and faces:
+        # Gather the footprint rings of the buildings we actually built.
+        built_rings = []
+        for slot in ordered[:args.buildings]:
+            rings = transfer._footprint_rings(index.buildings[slot])
+            if rings:
+                built_rings.append(max(rings, key=len))
+        tree_specs = trees_mod.street_trees(
+            built_rings, z + 0.15, spacing=args.tree_spacing, seed=71)
+
+        # Tiles for trunk and foliage.
+        trunk_path = out_dir / "tile_trunk.png"
+        bake("wood_plank", 0.5, (0.32, 0.22, 0.14),
+             px_per_m=args.tile_px_per_m, seed=55, out=trunk_path)
+        foliage_path = out_dir / "tile_foliage.png"
+        bake("foliage", 2.0, (0.22, 0.38, 0.18),
+             px_per_m=args.tile_px_per_m, seed=33, out=foliage_path)
+        tree_tiles = {"trunk": (trunk_path, 0.5),
+                      "foliage": (foliage_path, 2.0)}
+
+        for spec in tree_specs:
+            tq, tk = trees_mod.tree_geometry(**spec)
+            for quad, kind in zip(tq, tk):
+                ring = np.asarray(quad, dtype=float)
+                path, tile_m = tree_tiles.get(kind, tree_tiles["foliage"])
+                faces.append(gltf_textured.Face(
+                    ring=ring, uv=uv_for(ring, tile_m), image=path.name,
+                    kind=kind, surface_id=f"tree_{tree_count}_{kind}"))
+            tree_count += 1
+        print(f"  {tree_count} street trees", flush=True)
 
     if not faces:
         raise SystemExit("nothing was built")
@@ -281,6 +329,7 @@ def main() -> int:
         "material_match": match_record,
         "varied": args.vary,
         "vary_strength": args.vary_strength if args.vary else None,
+        "trees": tree_count,
         "buildings": records,
         "faces": len(faces),
     }
