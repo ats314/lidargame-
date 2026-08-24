@@ -474,8 +474,18 @@ def build_solid(patch, width: float, height: float, *, cell: float = 0.25,
     ctx[-1, :] |= Ctx.EDGE_U_MAX
     ctx[:, 0] |= Ctx.EDGE_V_MIN | Ctx.BOTTOM
     ctx[:, -1] |= Ctx.EDGE_V_MAX | Ctx.TOP
-    ctx[0, :] |= Ctx.CORNER_CONVEX
-    ctx[-1, :] |= Ctx.CORNER_CONVEX
+    # A wall's ends are only corners if the footprint actually turns there.
+    # Flagging both ends unconditionally put a quoin at every vertex of every
+    # footprint -- including the collinear ones a register carries from
+    # digitising -- so a straight brick frontage came out striped with stone
+    # every few metres. `walls_from_footprint` measures the turn and says.
+    ends = getattr(patch, "attrs", None) or {}
+    for index, key in ((0, "corner_u_min"), (-1, "corner_u_max")):
+        kind = ends.get(key, "convex")     # measured surfaces do not set it
+        if kind == "convex":
+            ctx[index, :] |= Ctx.CORNER_CONVEX
+        elif kind == "concave":
+            ctx[index, :] |= Ctx.CORNER_CONCAVE
 
     depth = distance_to_false(np.pad(solid, 1))[1:-1, 1:-1]
     ctx[depth >= interior_depth] |= Ctx.INTERIOR
