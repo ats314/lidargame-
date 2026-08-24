@@ -102,6 +102,20 @@ def resolve_place_tiles(place: dict, place_id: str) -> list[dict]:
     exact bbox per tile, so the tile whose centre is nearest the place is a
     stable answer. TNM stays as the fallback for places with no index.
     """
+    if place.get("grid") == "ahn":
+        from . import ahn
+
+        crop = place.get("suggested_crop")
+        if crop:
+            west, south, east, north = crop
+        else:
+            raise ValueError("an AHN place needs a suggested_crop in RD metres "
+                             "to resolve tiles; its WGS84 bbox is documentation")
+        tiles = ahn.tiles_for((west, south, east, north),
+                              version=place.get("version", "ahn5"))
+        return [{"title": t.id, "url": t.url, "published": place.get("version", ""),
+                 "bytes": 0, "format": "LAZ"} for t in tiles]
+
     acquisition = place.get("acquisition")
     if acquisition:
         try:

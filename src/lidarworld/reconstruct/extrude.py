@@ -95,10 +95,15 @@ FOOT = 0.3048
 def published_height(attrs, index: int) -> float | None:
     """Building height in metres from the footprint layer, if it carries one.
 
-    Denver states this in integer US survey feet above the building's own lowest
-    ground point, which is why it is returned as a height rather than an
-    elevation: converting the elevation would drag in the NAVD88/geoid datum,
-    while a height rides on the DTM the compiler already trusts.
+    Always metres above the building's own lowest ground point, whatever the
+    layer publishes -- `data.gis.attributes` normalises feet to metres and an
+    absolute NAP elevation to a height. That conversion used to live here as a
+    Denver-shaped constant, which read a 3D BAG metre as a foot and made every
+    Amsterdam building a third of its height.
+
+    It is returned as a height rather than an elevation because converting an
+    elevation would drag in the vertical datum, while a height rides on the DTM
+    the compiler already trusts.
 
     Caveat worth knowing: the outline is digitised at the eave, and for a
     pitched roof the height is measured to the ridge. Extruding straight to it
@@ -111,7 +116,7 @@ def published_height(attrs, index: int) -> float | None:
     if value is None:
         return None
     try:
-        metres = float(value) * FOOT
+        metres = float(value)
     except (TypeError, ValueError):
         return None
     # A zero height is a Foundation/Ruin record, not a building.

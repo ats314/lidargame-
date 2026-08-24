@@ -471,11 +471,11 @@ def build_parser() -> argparse.ArgumentParser:
                    # argparse %-expands help text, so a literal percent must be
                    # doubled: "6% of" reads as the %o format spec and blows up
                    # the whole `compile --help` screen, not just this line.
-                   help="street network for the carriageway: 'denver' or a path to "
+                   help="street network for the carriageway: 'denver', 'amsterdam' or a path to "
                         "GeoJSON. Intensity finds under 6%% of a downtown grid.")
     c.add_argument("--footprints", default=None,
                    help="authoritative building footprints: a GeoJSON path, or a "
-                        "layer id (e.g. 'denver') fetched for the compiled extent")
+                        "layer id ('denver', 'amsterdam') fetched for the compiled extent")
     c.add_argument("--crop", type=float, default=None,
                    help="take a centred square of this many metres; needs no CRS "
                         "knowledge, so it works on whatever tile you were given")

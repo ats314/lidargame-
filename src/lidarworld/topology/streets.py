@@ -52,12 +52,39 @@ CARRIAGEWAY = {
 #: "Local-Urban" by FUNCLASS -- so reading FUNCLASS gives a flat, wrong city.
 CLASS_FIELDS = ("VOLCLASS", "FUNCTIONAL_CLASS", "ROADCLASS", "STREETTYPE", "CLASS")
 
+#: The Dutch NWB carries no width and no functional class. `wegbehsrt` names the
+#: authority that maintains the road, which is a usable proxy at the top of the
+#: hierarchy -- the state maintains motorways, a municipality maintains streets
+#: -- and no help at all below it. Inside the canal belt every segment is "G",
+#: so this is one width for the whole network, and the network happens to be
+#: uniform: a 17th-century canal street is a canal street.
+NWB_AUTHORITY = {"R": 24.0, "P": 16.0, "G": 10.0, "W": 7.0, "T": 7.0}
+#: `bstCode` marks special carriageways, and these are narrower than the street
+#: they run beside. Read before the authority, since a municipal cycle path and
+#: a municipal street are both "G".
+NWB_SPECIAL = {"FP": 3.5, "VP": 3.5, "VZ": 3.5, "RP": 3.0, "BU": 6.5,
+               "BUS": 6.5, "OVB": 6.5, "PP": 6.0, "VD": 3.0}
+
 
 def widths(geojson: dict, *, default: float = 11.0) -> list[float]:
     """Half-width per line, from the network's own class attribute."""
     out = []
     for feature in geojson.get("features", []):
         props = feature.get("properties") or {}
+        special = NWB_SPECIAL.get(str(props.get("bstCode", "")).upper())
+        if special is not None:
+            width = special
+        elif props.get("wegbehsrt"):
+            width = NWB_AUTHORITY.get(str(props["wegbehsrt"]).upper(), default)
+        else:
+            width = None
+        if width is not None:
+            geometry = feature.get("geometry") or {}
+            parts = 1 if geometry.get("type") == "LineString" else len(
+                geometry.get("coordinates", []) or [1])
+            out.extend([width / 2.0] * max(parts, 1))
+            continue
+
         name = ""
         for key in CLASS_FIELDS:
             if props.get(key):
