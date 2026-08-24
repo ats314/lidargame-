@@ -95,10 +95,15 @@ FOOT = 0.3048
 def published_height(attrs, index: int) -> float | None:
     """Building height in metres from the footprint layer, if it carries one.
 
-    Denver states this in integer US survey feet above the building's own lowest
-    ground point, which is why it is returned as a height rather than an
-    elevation: converting the elevation would drag in the NAVD88/geoid datum,
-    while a height rides on the DTM the compiler already trusts.
+    Always metres above the building's own lowest ground point, whatever the
+    layer publishes -- `data.gis.attributes` normalises feet to metres and an
+    absolute NAP elevation to a height. That conversion used to live here as a
+    Denver-shaped constant, which read a 3D BAG metre as a foot and made every
+    Amsterdam building a third of its height.
+
+    It is returned as a height rather than an elevation because converting an
+    elevation would drag in the vertical datum, while a height rides on the DTM
+    the compiler already trusts.
 
     Caveat worth knowing: the outline is digitised at the eave, and for a
     pitched roof the height is measured to the ridge. Extruding straight to it
@@ -111,7 +116,7 @@ def published_height(attrs, index: int) -> float | None:
     if value is None:
         return None
     try:
-        metres = float(value) * FOOT
+        metres = float(value)
     except (TypeError, ValueError):
         return None
     # A zero height is a Foundation/Ruin record, not a building.
@@ -163,6 +168,14 @@ def build(rings, assignment: np.ndarray, patches, cloud, raster, dtm, *,
         # regenerated instead of predicted.
         program = program_ir.extrusion(f"bldg.{f:04d}", ring, base, top,
                                        roof="flat", source=source)
+        # The publisher's own building id, carried through to the seed. Without
+        # it a later comparison against the same register has to join on
+        # geometry and guess, which is a worse answer to a question the data
+        # already answers -- 3D BAG states a height per BAG id, and so does this.
+        published_id = (attrs[f].get("source_id")
+                        if attrs and f < len(attrs) else None)
+        if published_id:
+            program.params["source_id"] = str(published_id)
         agree = ""
         if source == "measured" and stated is not None:
             # Both numbers exist: report the disagreement rather than hiding it.
