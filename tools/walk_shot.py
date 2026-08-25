@@ -33,6 +33,12 @@ VIEWS = {
     "oblique":  ((-60, -60, 30), (30, 30, -5)),
     "oblique2": ((60, -55, 26), (-25, 30, -4)),
     "low":      ((-45, -45, 12), (35, 35, -2)),
+    # Framed for a reality mesh rather than for a compiled tile: high enough
+    # to clear the near roofline, aimed steeply enough down that the horizon
+    # sits near the top of frame instead of half the picture being empty
+    # environment past the crop edge.
+    "hero":     ((-150, -150, 62), (70, 70, -34)),
+    "hero2":    ((150, -120, 48), (-60, 70, -26)),
 }
 
 #: Offsets are metres, and a 140 m reality-mesh crop is a quarter the size of a
