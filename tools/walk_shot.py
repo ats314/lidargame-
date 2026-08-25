@@ -29,6 +29,15 @@ VIEWS = {
     "roofline": ((-70, 0, 38), (55, 0, 10)),
 }
 
+#: Offsets are metres, and a 140 m reality-mesh crop is a quarter the size of a
+#: compiled tile, so a pose written for one puts the camera outside the other.
+#: Scaled against the model's own extent instead of assumed.
+def scaled(view, extent_m: float) -> tuple:
+    factor = max(0.25, min(1.0, extent_m / 480.0))
+    eye, target = view
+    return (tuple(v * factor if i < 2 else v for i, v in enumerate(eye)),
+            tuple(v * factor if i < 2 else v for i, v in enumerate(target)))
+
 #: Elevation, bearing. Low sun is the honest test: it is what makes relief read
 #: and what makes a flat facade obvious.
 LIGHTS = {"morning": (18, 95), "noon": (68, 180), "evening": (12, 262)}
@@ -131,15 +140,29 @@ def main() -> int:
                         continue
                     if name not in VIEWS:
                         continue
-                    eye, target = VIEWS[name]
+                    eye, target = scaled(VIEWS[name],
+                                        max(size[0], size[2]))
                     # Source frame is z-up; the exporter already rotated the
                     # model, so a camera aimed in source coordinates ends up
                     # under the pavement looking at its underside.
-                    page.evaluate("""([eye, target, centre, floor]) => {
+                    placed = page.evaluate("""([eye, target, centre, floor]) => {
+                        // Eye-height poses stand on the ground under them;
+                        // only a deliberately elevated one uses the model
+                        // floor, and even that is a last resort.
+                        if (eye[2] < 5) {
+                            const r = window.walk.standAt(
+                                centre[0] + eye[0], centre[2] + eye[1], eye[2],
+                                [centre[0] + target[0], target[2], centre[2] + target[1]]);
+                            if (r) return r;
+                        }
                         window.walk.look(
                             [centre[0] + eye[0], floor + eye[2], centre[2] + eye[1]],
                             [centre[0] + target[0], floor + target[2], centre[2] + target[1]]);
+                        return null;
                     }""", [list(eye), list(target), centre, bounds["min"][1]])
+                    if placed:
+                        print(f"  {name}: ground {placed['ground']:.1f} m, "
+                              f"eye {placed['eye']:.1f} m")
                     page.wait_for_timeout(900)
                     path = out / f"{light}-{name}.png"
                     page.screenshot(path=str(path))

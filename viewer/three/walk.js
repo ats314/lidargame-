@@ -167,6 +167,7 @@ const down = new THREE.Raycaster();
 down.far = 500;
 let world = null;
 let groundHeld = true;
+let frozen = false;
 
 function step(dt) {
   const speed = WALK_MS * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN_MULTIPLIER : 1) * dt;
@@ -183,6 +184,15 @@ function step(dt) {
   if (keys.has('KeyD')) move.add(right);
   if (keys.has('KeyA')) move.sub(right);
   if (move.lengthSq() > 0) camera.position.addScaledVector(move.normalize(), speed);
+
+  // A pose set for a screenshot must survive the frame loop. Without this the
+  // ground-follow below immediately drags the camera back to eye height, so
+  // every posed shot silently became a ground-level shot -- which is why
+  // cameras kept ending up jammed against a facade.
+  if (frozen) {
+    if (keys.size) frozen = false;
+    else return;
+  }
 
   // Free-fly while space is held, otherwise stay a person's height above
   // whatever is underfoot. A fixed height puts the camera inside a hill.
@@ -288,6 +298,7 @@ new GLTFLoader().load(MODEL, (gltf) => {
       camera.lookAt(target[0], target[1], target[2]);
       euler.setFromQuaternion(camera.quaternion);
       groundHeld = false;
+      frozen = true;          // hold it until somebody actually walks
     },
     /**
      * A standing spot with room around it, and something to look at.
@@ -404,6 +415,24 @@ new GLTFLoader().load(MODEL, (gltf) => {
       const target = eye.clone().addScaledVector(along, 60).setY(eyeY + 6);
       this.look(eye.toArray(), target.toArray());
       return { eye: eye.toArray(), clearanceM: bestDistance * cellM };
+    },
+    /**
+     * Stand at x,z with the eye a real height above the ground there.
+     *
+     * The floor is not the model's lowest vertex. A reality mesh carries
+     * below-ground geometry, so anchoring to bounds.min.y put a "street level"
+     * camera fifteen metres under the pavement looking up at the underside of
+     * the city -- which is what every street shot of Helsinki was.
+     */
+    standAt(x, z, height, target) {
+      const box = new THREE.Box3().setFromObject(world);
+      const probe = new THREE.Raycaster();
+      probe.set(new THREE.Vector3(x, box.max.y + 10, z), new THREE.Vector3(0, -1, 0));
+      const hit = probe.intersectObject(world, true)[0];
+      if (!hit) return null;
+      const eyeY = hit.point.y + height;
+      this.look([x, eyeY, z], [target[0], eyeY + target[1], target[2]]);
+      return { ground: hit.point.y, eye: eyeY };
     },
     setSun(elevation, bearing) {
       document.getElementById('sun').value = elevation;
