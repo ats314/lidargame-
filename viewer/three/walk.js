@@ -95,6 +95,21 @@ function skyEnvironment(sunDirection) {
   return target.texture;
 }
 
+/**
+ * Ground height under a point.
+ *
+ * The *first* thing a downward ray meets is a roof, so taking hit[0] stands
+ * the camera on the building instead of in the street -- the Helsinki street
+ * shot came out on a rooftop next to a chimney. Aerial photogrammetry has no
+ * interior, so the lowest surface at an x,z is the ground.
+ */
+function groundUnder(target, x, z, top) {
+  const probe = new THREE.Raycaster();
+  probe.set(new THREE.Vector3(x, top, z), new THREE.Vector3(0, -1, 0));
+  const hits = probe.intersectObject(target, true);
+  return hits.length ? hits[hits.length - 1].point.y : null;
+}
+
 const sun = new THREE.DirectionalLight(0xfff2dc, 3.1);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -202,9 +217,9 @@ function step(dt) {
   } else if (world) {
     down.set(new THREE.Vector3(camera.position.x, camera.position.y + 80, camera.position.z),
              new THREE.Vector3(0, -1, 0));
-    const hit = down.intersectObject(world, true)[0];
-    if (hit) {
-      const target = hit.point.y + EYE_M;
+    const hits = down.intersectObject(world, true);
+    if (hits.length) {
+      const target = hits[hits.length - 1].point.y + EYE_M;
       camera.position.y += (target - camera.position.y) * (groundHeld ? Math.min(1, dt * 9) : Math.min(1, dt * 2.5));
       groundHeld = true;
     }
@@ -397,10 +412,8 @@ new GLTFLoader().load(MODEL, (gltf) => {
 
       // Ground under the spot, raycast once. A fixed height puts the camera
       // underground on any block with relief.
-      const probe = new THREE.Raycaster();
-      probe.set(new THREE.Vector3(x, box.max.y + 5, z), new THREE.Vector3(0, -1, 0));
-      const ground = probe.intersectObject(world, true)[0];
-      const eyeY = (ground ? ground.point.y : floor) + EYE_M;
+      const ground = groundUnder(world, x, z, box.max.y + 5);
+      const eyeY = (ground === null ? floor : ground) + EYE_M;
 
       // Aim along the gradient of the distance field, which runs down the
       // street rather than into the wall behind you.
@@ -426,13 +439,11 @@ new GLTFLoader().load(MODEL, (gltf) => {
      */
     standAt(x, z, height, target) {
       const box = new THREE.Box3().setFromObject(world);
-      const probe = new THREE.Raycaster();
-      probe.set(new THREE.Vector3(x, box.max.y + 10, z), new THREE.Vector3(0, -1, 0));
-      const hit = probe.intersectObject(world, true)[0];
-      if (!hit) return null;
-      const eyeY = hit.point.y + height;
+      const ground = groundUnder(world, x, z, box.max.y + 10);
+      if (ground === null) return null;
+      const eyeY = ground + height;
       this.look([x, eyeY, z], [target[0], eyeY + target[1], target[2]]);
-      return { ground: hit.point.y, eye: eyeY };
+      return { ground, eye: eyeY };
     },
     setSun(elevation, bearing) {
       document.getElementById('sun').value = elevation;

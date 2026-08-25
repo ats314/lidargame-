@@ -27,6 +27,12 @@ VIEWS = {
     "approach": ((0, -90, 1.7), (0, 40, 14)),
     "corner":   ((-28, 26, 1.7), (45, -25, 10)),
     "roofline": ((-70, 0, 38), (55, 0, 10)),
+    # Aerial photogrammetry is dense above the roofline and thin at street
+    # level -- a Helsinki crop carries 6,777 facade triangles below 3 m and
+    # 60,321 above 10 m. These play to that rather than against it.
+    "oblique":  ((-60, -60, 30), (30, 30, -5)),
+    "oblique2": ((60, -55, 26), (-25, 30, -4)),
+    "low":      ((-45, -45, 12), (35, 35, -2)),
 }
 
 #: Offsets are metres, and a 140 m reality-mesh crop is a quarter the size of a
@@ -49,6 +55,9 @@ def serve(root: Path, port: int):
             self, *a, directory=str(root), **k),
         "log_message": lambda *a: None,
     })
+    # Without this a run that ended badly leaves the port in TIME_WAIT and the
+    # next one dies with "Address already in use" before it renders anything.
+    socketserver.TCPServer.allow_reuse_address = True
     server = socketserver.TCPServer(("127.0.0.1", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
