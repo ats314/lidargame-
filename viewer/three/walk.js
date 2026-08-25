@@ -16,6 +16,20 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const params = new URLSearchParams(location.search);
 const MODEL = params.get('model') || '../../build/walk/walk.gltf';
+/**
+ * Photogrammetric meshes are already lit.
+ *
+ * A reality mesh's texture is a photograph of a building under the sun that
+ * was shining when the aircraft flew. Running it through a PBR shader with our
+ * own sun and environment multiplies one lighting solution by another and the
+ * result is mud -- which is exactly what the first Helsinki render was. For
+ * that input the texture *is* the answer, so the shading model has to get out
+ * of the way.
+ *
+ * Generated worlds are the opposite: their albedo is unlit by construction and
+ * they need every bit of the lighting rig.
+ */
+const UNLIT = params.get('unlit') === '1';
 const EYE_M = 1.7;                    // standing eye height, metres
 const WALK_MS = 1.6;                  // metres per second
 const RUN_MULTIPLIER = 3.4;
@@ -231,7 +245,16 @@ new GLTFLoader().load(MODEL, (gltf) => {
     // Facades are single-sided quads in places; back-face culling on a wall
     // whose winding went the other way renders a hole straight through the
     // building. Trust the geometry, not the material flag.
-    if (node.material) node.material.side = THREE.FrontSide;
+    if (!node.material) return;
+    node.material.side = THREE.FrontSide;
+    if (UNLIT) {
+      const lit = node.material;
+      node.material = new THREE.MeshBasicMaterial({
+        map: lit.map, color: lit.color, side: THREE.FrontSide,
+      });
+      node.castShadow = false;
+      node.receiveShadow = false;
+    }
   });
   scene.add(world);
 

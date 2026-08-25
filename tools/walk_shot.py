@@ -56,6 +56,9 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--width", type=int, default=1600)
     ap.add_argument("--height", type=int, default=900)
+    ap.add_argument("--unlit", action="store_true",
+                    help="the model's texture is already a photograph of lit "
+                         "geometry; do not light it a second time")
     ap.add_argument("--chrome", default="/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
     args = ap.parse_args()
 
@@ -96,7 +99,8 @@ def main() -> int:
             page.on("requestfailed", lambda r: problems.append(f"failed: {r.url}"))
 
             page.goto(f"http://127.0.0.1:{args.port}/three/index.html"
-                      f"?model=./_model/{model.name}", wait_until="load")
+                      f"?model=./_model/{model.name}"
+                      + ("&unlit=1" if args.unlit else ""), wait_until="load")
             page.wait_for_function("window.walk && window.walk.ready", timeout=180_000)
 
             bounds = page.evaluate("() => window.walk.bounds")
