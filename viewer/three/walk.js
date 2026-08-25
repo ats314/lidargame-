@@ -110,6 +110,10 @@ function groundUnder(target, x, z, top) {
   return hits.length ? hits[hits.length - 1].point.y : null;
 }
 
+//: Sky at the horizon. Fog matches it exactly, so the model's cut edge
+//: dissolves into distance instead of ending in mid-air.
+const HORIZON = new THREE.Color(0xc3d2df);
+
 const sun = new THREE.DirectionalLight(0xfff2dc, 3.1);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -151,7 +155,15 @@ function placeSun() {
   sun.intensity = 0.9 + 2.6 * warmth;
 
   scene.environment = skyEnvironment(direction);
-  scene.background = scene.environment;
+  // Background is *not* the environment map. The environment's lower half is
+  // ground bounce -- a dark warm colour that exists so a rough surface has
+  // something to reflect from below -- and using it as the backdrop paints a
+  // brown wall across everything past the edge of the model. A crop is
+  // surrounded by nothing, so what belongs there is sky and haze.
+  if (!scene.background || !scene.background.isColor) {
+    scene.background = new THREE.Color();
+  }
+  scene.background.copy(HORIZON);
 }
 
 /** Walk controls: pointer lock for look, WASD for move, eye height held. */
@@ -294,7 +306,9 @@ new GLTFLoader().load(MODEL, (gltf) => {
 
   // Distance haze only; the old viewer drowned a block at 63% opacity by
   // 100 m, so this starts well beyond the model and never closes in.
-  scene.fog = new THREE.Fog(0xa8bccd, radius * 1.6, radius * 6.5);
+  // Reach the far plane just past the model so its boundary fades rather than
+  // ending on a hard silhouette against empty sky.
+  scene.fog = new THREE.Fog(HORIZON, radius * 1.1, radius * 3.2);
 
   placeSun();
   resize();
