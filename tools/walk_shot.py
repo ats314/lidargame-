@@ -155,15 +155,15 @@ def main() -> int:
                     # model, so a camera aimed in source coordinates ends up
                     # under the pavement looking at its underside.
                     placed = page.evaluate("""([eye, target, centre, floor]) => {
-                        // Eye-height poses stand on the ground under them;
-                        // only a deliberately elevated one uses the model
-                        // floor, and even that is a last resort.
-                        if (eye[2] < 5) {
-                            const r = window.walk.standAt(
-                                centre[0] + eye[0], centre[2] + eye[1], eye[2],
-                                [centre[0] + target[0], target[2], centre[2] + target[1]]);
-                            if (r) return r;
-                        }
+                        // Every pose measures the ground beneath it, not just
+                        // the eye-height ones. bounds.min.y is the lowest
+                        // vertex in the model -- below-ground geometry -- so a
+                        // camera "12 m up" from that floor was still 4 m under
+                        // the pavement, looking at the underside of the city.
+                        const r = window.walk.standAt(
+                            centre[0] + eye[0], centre[2] + eye[1], eye[2],
+                            [centre[0] + target[0], target[2], centre[2] + target[1]]);
+                        if (r) return r;
                         window.walk.look(
                             [centre[0] + eye[0], floor + eye[2], centre[2] + eye[1]],
                             [centre[0] + target[0], floor + target[2], centre[2] + target[1]]);
