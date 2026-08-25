@@ -33,6 +33,37 @@ def _ring_is_clockwise(ring: np.ndarray) -> bool:
     return float(np.sum((x[1:] - x[:-1]) * (y[1:] + y[:-1]))) > 0
 
 
+#: How far a footprint has to turn at a vertex before that vertex is a corner
+#: somebody would call a corner. A register's footprint carries vertices that
+#: are not corners at all -- collinear points from digitising, and one or two
+#: degrees of survey noise along a straight frontage. Below this the wall is
+#: continuing, not turning.
+CORNER_TURN_DEG = 25.0
+
+
+def _turns(ring: np.ndarray, clockwise: bool) -> np.ndarray:
+    """Signed turn at each vertex of a closed ring, in degrees.
+
+    Positive is convex -- the building turning outward, the kind of corner a
+    quoin belongs on. Negative is a reflex corner, the inside of an L. Near
+    zero is a straight frontage that merely has a vertex in it.
+    """
+    points = np.asarray(ring, dtype=float)[:, :2]
+    if len(points) > 1 and np.allclose(points[0], points[-1]):
+        points = points[:-1]
+    if len(points) < 3:
+        return np.zeros(len(points))
+
+    incoming = points - np.roll(points, 1, axis=0)
+    outgoing = np.roll(points, -1, axis=0) - points
+    cross = incoming[:, 0] * outgoing[:, 1] - incoming[:, 1] * outgoing[:, 0]
+    dot = (incoming * outgoing).sum(axis=1)
+    turn = np.degrees(np.arctan2(cross, dot))
+    # For a clockwise ring the exterior is on the other side, so an outward
+    # turn has the opposite sign.
+    return -turn if clockwise else turn
+
+
 def walls_from_footprint(ring: np.ndarray, base_z: float, top_z: float, *,
                          start_id: int = 0, min_edge: float = 1.0,
                          max_edges: int = 64) -> list[PlanarPatch]:
@@ -45,7 +76,21 @@ def walls_from_footprint(ring: np.ndarray, base_z: float, top_z: float, *,
     mid_z = (base_z + top_z) / 2
     walls: list[PlanarPatch] = []
 
-    for a, b in zip(ring[:-1], ring[1:]):
+    turn = _turns(ring, clockwise)
+    vertices = len(turn)
+
+    def corner_kind(index: int) -> str:
+        """What a theme should paint at this footprint vertex."""
+        if not vertices:
+            return "flat"
+        degrees = float(turn[index % vertices])
+        if degrees >= CORNER_TURN_DEG:
+            return "convex"
+        if degrees <= -CORNER_TURN_DEG:
+            return "concave"
+        return "flat"
+
+    for index, (a, b) in enumerate(zip(ring[:-1], ring[1:])):
         edge = b - a
         length = float(np.hypot(edge[0], edge[1]))
         if length < min_edge or len(walls) >= max_edges:
@@ -73,6 +118,19 @@ def walls_from_footprint(ring: np.ndarray, base_z: float, top_z: float, *,
         patch.attrs["extruded"] = True
         patch.attrs["base_z"] = round(base_z, 2)
         patch.attrs["top_z"] = round(top_z, 2)
+
+        # Which end of *this wall's own u axis* each footprint vertex lands on.
+        # plane_frame is free to point u either way along the edge, so deciding
+        # by projection is the only thing that cannot get it backwards -- and a
+        # quoin painted on the wrong end is invisible in a test and obvious in
+        # a render.
+        start = np.array([a[0], a[1], mid_z]) - centroid
+        end = np.array([b[0], b[1], mid_z]) - centroid
+        at_start, at_end = corner_kind(index), corner_kind(index + 1)
+        if float(start @ u) <= float(end @ u):
+            patch.attrs["corner_u_min"], patch.attrs["corner_u_max"] = at_start, at_end
+        else:
+            patch.attrs["corner_u_min"], patch.attrs["corner_u_max"] = at_end, at_start
         walls.append(patch)
     return walls
 

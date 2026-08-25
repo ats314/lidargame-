@@ -191,3 +191,48 @@ def test_forward_validation_backends_agree_on_a_clean_hit(compiled_world):
         assert t_embree[0] >= t_voxel[0] - 1e-6 or not np.isfinite(t_voxel[0])
         assert abs(np.linalg.norm(normals[0]) - 1.0) < 1e-3, "normals must be unit length"
         assert node_embree[0] >= 0
+
+
+def test_gltf_export_ships_normal_and_orm_maps(compiled_world, tmp_path):
+    """Relief and roughness must survive to the engine, not just be generated.
+
+    `procedural.bake` has always returned three channels. For a long time the
+    backend wrote only the albedo, so every wall arrived flat: a brick texture
+    with no normal map is a photograph of bricks, and no amount of lighting in
+    the viewer can recover the depth that was dropped here.
+
+    Asserted on the decoded document rather than on the call, because the bug
+    this guards against is silent -- the export succeeds either way.
+    """
+    pack = load_pack("victorian")
+    gltf_backend.export(compiled_world, pack, tmp_path, name="t", bake_textures=True)
+    document = json.loads((tmp_path / "t.gltf").read_text())
+
+    textured = [m for m in document["materials"]
+                if "baseColorTexture" in m["pbrMetallicRoughness"]]
+    assert textured, "no material carried a baked texture at all"
+
+    for material in textured:
+        pbr = material["pbrMetallicRoughness"]
+        assert "normalTexture" in material, f"{material['name']} has no relief"
+        assert "metallicRoughnessTexture" in pbr, f"{material['name']} has no roughness map"
+
+        # Occlusion and metallic-roughness are the same image by design: AO in
+        # R, roughness in G, metallic in B.
+        assert material["occlusionTexture"]["index"] == pbr["metallicRoughnessTexture"]["index"]
+
+        # A constant factor multiplies against the texture, so leaving the
+        # spec's own roughness in place here would darken the map a second
+        # time -- the values are already baked into G by `procedural.bake`.
+        assert pbr["roughnessFactor"] == 1.0
+        assert pbr["metallicFactor"] == 1.0
+
+        # Each map must be a distinct image; pointing three slots at one file
+        # is the failure mode where a normal map is silently the albedo.
+        slots = {material["normalTexture"]["index"],
+                 pbr["metallicRoughnessTexture"]["index"],
+                 pbr["baseColorTexture"]["index"]}
+        assert len(slots) == 3
+
+    for image in document["images"]:
+        assert (tmp_path / image["uri"]).exists(), f"{image['uri']} referenced but not written"

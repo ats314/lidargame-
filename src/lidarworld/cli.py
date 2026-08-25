@@ -97,6 +97,7 @@ def _cmd_compile(args) -> int:
         footprints=args.footprints,
         streets=args.streets,
         detect_openings=not args.no_openings,
+        generate_openings=not args.no_generated_openings,
         keep_points=not args.no_points,
         verbose=not args.quiet,
     )
@@ -495,7 +496,11 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--sir", action="store_true",
                    help="also export Spatial IR v0.1 (spec/schema), with "
                         "epistemic state derived from measured evidence")
-    c.add_argument("--no-openings", action="store_true")
+    c.add_argument("--no-openings", action="store_true",
+                   help="do not detect openings from returns")
+    c.add_argument("--no-generated-openings", action="store_true",
+                   help="leave extruded walls blank rather than cutting "
+                        "generated windows into them")
     c.add_argument("--no-textures", action="store_true")
     c.add_argument("--no-points", action="store_true")
     c.add_argument("-q", "--quiet", action="store_true")

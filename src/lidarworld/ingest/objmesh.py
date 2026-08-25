@@ -40,6 +40,11 @@ class Group:
     material: str
     image: Path | None
     faces: np.ndarray                      # (T, 3) indices into positions/uvs
+    #: Optional non-colour maps. An OBJ almost never carries these -- a
+    #: photogrammetric mesh has colour and nothing else -- but a generated
+    #: surface does, and the glTF writer places them if they are here.
+    normal_image: Path | None = None
+    orm_image: Path | None = None
 
     def __len__(self) -> int:
         return len(self.faces)

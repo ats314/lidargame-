@@ -30,6 +30,7 @@ from pathlib import Path
 import numpy as np
 
 from ..reconstruct import extrude as extrude_stage
+from ..reconstruct import fenestrate as fenestrate_stage
 from ..reconstruct import lattice as lattice_stage
 from ..reconstruct import mesh as mesh_stage
 from ..reconstruct import terrain as terrain_stage
@@ -301,65 +302,14 @@ STOREY_M = 3.8
 def _fenestrate(lattice, patch, building, index: int) -> None:
     """Cut window and door openings into a generated facade.
 
-    Every wall here is Tier 7 -- procedural generation -- because the evidence
-    genuinely does not constrain it: airborne LiDAR never sees a facade, so
-    there is nothing to be faithful to and nothing to be wrong about. What the
-    seed *does* constrain is the envelope, and a window grid derived from the
-    building's own height and footprint stays inside that.
-
-    Deterministic on the building's identity, so the same seed regenerates the
-    same street rather than a different one each run. That is what makes the
-    world reproducible rather than merely random.
+    The rhythm itself lives in `reconstruct/fenestrate.py`, because the compile
+    path needs exactly the same thing: an extruded wall has no returns to detect
+    an opening in, so both paths are generating rather than measuring. Keeping
+    one copy is what stops a street generated from a seed drifting away from
+    the same street compiled from the tile.
     """
-    if not patch.role.startswith("surface.wall"):
-        return
-    if patch.attrs.get("party_wall"):
-        # A wall built hard against the neighbouring building. In brick cities
-        # these are blank by construction -- you cannot put a window where the
-        # next building is -- and glazing them is what made every block look
-        # like a free-standing office park rather than a terrace.
-        return
-    occupancy = lattice.occupancy
-    context = lattice.context
-    nu, nv = occupancy.shape
-    cell = lattice.cell
-    height_m = nv * cell
-    if height_m < 4.0 or nu * cell < 3.0:
-        return                      # a garden wall, not a facade
-
-    rng = np.random.default_rng(abs(hash((building.get("id", index), patch.id))) % (2 ** 32))
-    storeys = max(1, int(round(height_m / STOREY_M)))
-
-    # A window every 3 m on every wall of every building reads as a
-    # spreadsheet, not a street. Real frontages vary the bay width by building,
-    # and the variation is most of what stops a row of blocks looking stamped.
-    # Deterministic per building, so the street is the same street every run.
-    bay_m = float(rng.uniform(4.2, 7.0))
-    win_frac = float(rng.uniform(0.30, 0.45))   # how much of a bay is glass
-    win_w = max(2, int(round(bay_m * win_frac / cell)))
-    win_h = max(2, int(round(rng.uniform(1.5, 2.1) / cell)))
-    pitch = max(win_w + 2, int(round(bay_m / cell)))
-    pier = pitch - win_w
-    if pitch >= nu:
-        return
-
-    margin = max(1, (nu % pitch) // 2)
-    for storey in range(storeys):
-        # Sill sits ~1 m above each floor, and the ground storey is taller,
-        # which is what makes a shopfront read differently from a flat above it.
-        floor_v = int(round(storey * STOREY_M / cell))
-        sill = floor_v + int(round((1.5 if storey else 0.8) / cell))
-        top = sill + (win_h if storey else int(round(2.4 / cell)))
-        if top >= nv - 1:
-            break
-        for u0 in range(margin, nu - win_w, pitch):
-            if storey and rng.random() < 0.10:
-                continue           # a blank bay; perfect regularity reads as CGI
-            occupancy[u0:u0 + win_w, sill:top] = 0
-            # Flag the reveal so a theme can put trim or a lintel on it.
-            context[max(0, u0 - 1):u0 + win_w + 1,
-                    max(0, sill - 1):min(nv, top + 1)] |= int(Ctx.NEAR_OPENING)
-            context[u0:u0 + win_w, sill:top] |= int(Ctx.OPENING_BOUNDARY)
+    fenestrate_stage.fenestrate(
+        lattice, patch, key=building.get("id", index), storey_m=STOREY_M)
 
 
 def _clip_to_footprint(lattice, patch, ring: np.ndarray) -> None:
