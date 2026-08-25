@@ -129,13 +129,78 @@ lookup that decides what to download should not contain a guess.
 - `TileIndex` globbed `*.laz` case-sensitively; GeoTiles serves `.LAZ`. A
   directory with a 240 MB tile in it indexed as empty.
 
-## Not wired
+## Walkable
 
-- **The canals.** `BGT waterdeel` has them as polygons. LiDAR over water is a
-  hole -- the pulse leaves and does not come back -- so the returns describe a
-  city with gaps and the layer says the gaps are canals. The World Seed has no
-  water field, which is the actual blocker, and in Amsterdam that omission is
-  not a detail.
+The first build was not walkable, and the reason was the canals. Water is
+specular at 1064 nm, so the returns describe Amsterdam as a city with holes in
+it -- the 400 m block compiled with *not one point* classified water, and the
+mesher correctly refused to surface the void. The ground stopped at the quay.
+
+`--water amsterdam` fills the surveyed `BGT waterdeel` polygons under the rule
+`--streets` already follows: accept an authoritative statement about what a
+surface is, fill only where the returns give something to fill to, and keep
+measured and inferred apart.
+
+```
+water surface filled 100,985 void cells at -0.75 m,
+0.9 m below a measured bank at 0.15 m
+```
+
+That is 16% of an 800 m block -- a sixth of the ground plane that was a hole.
+
+**The level is inferred and it is the weak number here.** A canal's water
+surface cannot be derived from a scan that never saw the water, so it is a
+constant drop below the measured bank and is recorded as `"surface":
+"inferred"` in the seed. It lands at NAP -0.75 m. Amsterdam's canals are held
+at NAP -0.40 m by ordinance, so the inferred surface is **0.35 m too low** --
+about the depth of a step, which is the right order for something nothing was
+measured about, and wrong enough that a generator should take the outline and
+the ordinance rather than this number if it has one.
+
+Two rules keep the fill honest:
+
+- Only VOID cells are taken. A cell inside the polygon carrying measured ground
+  is a bridge, a houseboat, or a polygon overshooting the quay, and it is left
+  as measured.
+- The bank level is a 10th percentile of the ring outside the polygon, not a
+  mean, so one bridge parapet or moored barge does not raise the whole canal.
+
+In the viewer, water is terrain and terrain was walkable, which would have made
+a filled canal a surface you stroll across -- a worse lie than the hole it
+replaced. The heightfield flags wet cells and the walk controller refuses to
+enter them, sliding along the bank instead. Fly mode is exempt.
+
+### The 800 m block
+
+```
+lidarworld compile data/real --bbox 121100,486300,121900,487100 -o build/ams800 \
+    --footprints amsterdam --streets amsterdam --water amsterdam \
+    --theme victorian --theme survey --seed --sir
+```
+
+```
+13,851,976 points          1491 footprints, 10,964 walls, 5261 openings
+1903 structures            340 roads, 64 water bodies, 5612 trees
+124,388 cells promoted to carriageway
+100,985 void cells filled as water
+seed 1.2 MB, bundle 390 MB
+```
+
+Shot from the quay it reads as a canal street: water down the middle, cobbled
+bank, brick frontage receding both sides. Two things are visibly wrong and
+neither shows up in a metric -- the quay-to-water transition is a ragged fringe
+of tilted slabs where the fill meets the last measured cells, and at eye level
+the near facades are blank brick, because the openings that were detected are
+not on the walls a pedestrian is standing next to.
+
+`tools/shoot.py --pose name=ex,ey,ez,tx,ty,tz` puts the camera somewhere
+specific rather than at a fixed offset from the block centre, which in a canal
+block aims the "street" view at a facade two metres away. The pose is in the
+*bundle* frame, which is centred on the block -- not the seed's 0,0 corner.
+Reading `world.bounds` first is the difference between standing on a quay and
+standing outside the city looking at the underside of it.
+
+## Not wired
 - **BGT wegdeel**, the carriageway as a surveyed polygon with its surface
   material. Strictly better evidence than a centreline and an assumed width; the
   street stage rasterises lines, so swapping it is its own change.

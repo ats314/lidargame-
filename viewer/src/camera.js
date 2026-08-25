@@ -109,10 +109,20 @@ export class Camera {
     }
   }
 
-  /** Push out of building footprints along the shallowest axis, so you slide. */
+  /** Push out of building footprints along the shallowest axis, so you slide.
+   *  A step into water is refused outright rather than slid along: a canal is
+   *  not an obstacle with a side to scrape past, it is the edge of the walkable
+   *  world, and the quay is where you stop. */
   _resolve(x, y) {
     let outX = x;
     let outY = y;
+    const field = this.world.heightfield;
+    if (!this.fly && field.isWater && field.isWater(outX, outY)) {
+      // Try each axis alone, so walking along a canal bank still slides.
+      if (!field.isWater(outX, this.position[1])) outY = this.position[1];
+      else if (!field.isWater(this.position[0], outY)) outX = this.position[0];
+      else { outX = this.position[0]; outY = this.position[1]; }
+    }
     for (const b of this.world.blockers) {
       if (!(outX > b.minX - RADIUS && outX < b.maxX + RADIUS
             && outY > b.minY - RADIUS && outY < b.maxY + RADIUS)) continue;

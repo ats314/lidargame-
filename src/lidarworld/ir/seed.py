@@ -36,13 +36,17 @@ import numpy as np
 
 @dataclass
 class WorldSeed:
-    """Terrain, roads, buildings, vegetation, regions. Nothing else."""
+    """Terrain, roads, water, buildings, vegetation, regions. Nothing else."""
     name: str
     crs: str = ""
     origin: list = field(default_factory=lambda: [0.0, 0.0, 0.0])
     bounds: list = field(default_factory=list)
     terrain: dict = field(default_factory=dict)
     roads: list = field(default_factory=list)
+    #: Surveyed water bodies: an outline and a level. A canal is the one thing
+    #: here the returns cannot describe -- water sends the pulse away -- so the
+    #: outline is measured, the level is inferred, and a generator needs both.
+    water: list = field(default_factory=list)
     buildings: list = field(default_factory=list)
     vegetation: list = field(default_factory=list)
     regions: dict = field(default_factory=dict)
@@ -52,13 +56,14 @@ class WorldSeed:
         return {"seed": "lidarworld/0.1", "name": self.name, "crs": self.crs,
                 "origin": self.origin, "bounds": self.bounds,
                 "terrain": self.terrain, "roads": self.roads,
+                "water": self.water,
                 "buildings": self.buildings, "vegetation": self.vegetation,
                 "regions": self.regions, "provenance": self.provenance}
 
     @property
     def counts(self) -> dict:
         return {"buildings": len(self.buildings), "roads": len(self.roads),
-                "trees": len(self.vegetation),
+                "water": len(self.water), "trees": len(self.vegetation),
                 "terrain_cells": int(np.prod(self.terrain.get("shape", [0, 0])))}
 
 
@@ -239,6 +244,12 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
         })
 
     seed.roads = list(world.notes.get("road_network", []))
+    seed.water = [
+        {"ring": [[round(float(x), 2), round(float(y), 2)]
+                  for x, y in _simplify(np.asarray(body["ring"], dtype=float),
+                                        simplify)],
+         "level_z": body["level_z"], "surface": "inferred"}
+        for body in world.notes.get("water_bodies", [])]
     seed.provenance = {
         "sources": [s.id for s in world.sources],
         "crs": world.crs,
@@ -396,7 +407,8 @@ def read(path: str | Path) -> WorldSeed:
     return WorldSeed(name=data.get("name", "world"), crs=data.get("crs", ""),
                      origin=data.get("origin", [0, 0, 0]),
                      bounds=data.get("bounds", []), terrain=data.get("terrain", {}),
-                     roads=data.get("roads", []), buildings=data.get("buildings", []),
+                     roads=data.get("roads", []), water=data.get("water", []),
+                     buildings=data.get("buildings", []),
                      vegetation=data.get("vegetation", []),
                      regions=data.get("regions", {}),
                      provenance=data.get("provenance", {}))

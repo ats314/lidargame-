@@ -96,6 +96,7 @@ def _cmd_compile(args) -> int:
         crop_m=args.crop,
         footprints=args.footprints,
         streets=args.streets,
+        water=args.water,
         detect_openings=not args.no_openings,
         keep_points=not args.no_points,
         verbose=not args.quiet,
@@ -138,7 +139,7 @@ def _cmd_compile(args) -> int:
         info = write_seed(extract(world, bundle=out), out / f"{config.name}.seed.json")
         line = (f"  world seed  {info['path']} ({info['bytes'] / 1024:.0f} KB: "
                 f"{info['buildings']} buildings, {info['roads']} roads, "
-                f"{info['trees']} trees)")
+                f"{info.get('water', 0)} water bodies, {info['trees']} trees)")
         if info.get("ratio"):
             line += f"\n              {info['ratio']:.0f}x smaller than the bundle it came from"
         print(line)
@@ -473,6 +474,10 @@ def build_parser() -> argparse.ArgumentParser:
                    # the whole `compile --help` screen, not just this line.
                    help="street network for the carriageway: 'denver', 'amsterdam' or a path to "
                         "GeoJSON. Intensity finds under 6%% of a downtown grid.")
+    c.add_argument("--water", default=None,
+                   help="surveyed water polygons: 'amsterdam' or a path to "
+                        "GeoJSON. Water is specular, so a canal is an absence "
+                        "in the returns and the ground stops at the quay.")
     c.add_argument("--footprints", default=None,
                    help="authoritative building footprints: a GeoJSON path, or a "
                         "layer id ('denver', 'amsterdam') fetched for the compiled extent")

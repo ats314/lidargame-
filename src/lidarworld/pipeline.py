@@ -79,6 +79,10 @@ class Config:
     #: Intensity finds under 6% of a downtown grid; the network is
     #: authoritative and Denver publishes it.
     streets: str | None = None
+    #: Surveyed water polygons: an id in lidarworld.data.gis.WATER, or a path to
+    #: GeoJSON. Airborne returns describe a canal as an absence, so without this
+    #: the ground stops at the quay and the world is not walkable there.
+    water: str | None = None
     #: Reject synthesised surfaces standing above the highest return in
     #: their column -- space the beam demonstrably crossed.
     gate_free_space: bool = True
@@ -377,6 +381,17 @@ def compile_world(paths, config: Config | None = None, *, adapter: str | None = 
             _log(config, f"street network promoted {info['promoted']:,} terrain cells "
                          f"to carriageway ({info['road_cells_before']:,} -> "
                          f"{info['road_cells_after']:,})")
+        if config.water:
+            info = _apply_water(config.water, world, cloud, raster, class_raster, dtm)
+            rec.params["water"] = info
+            if info["cells"]:
+                _log(config, f"water surface filled {info['cells']:,} void cells at "
+                             f"{info['level_m']} m, {info['drop_m']} m below a "
+                             f"measured bank at {info['bank_level_m']} m "
+                             f"(inferred: nothing came back off the water)")
+            else:
+                _log(config, f"water: {info['polygon_cells']:,} cells inside the "
+                             "surveyed polygons, none of them void -- nothing filled")
         # Classify the absences before anything is allowed to fill them. The
         # footprints are a declared semantic region, so a hole under one is a
         # roof the sensor missed rather than a void; a hole under nothing is a
@@ -655,6 +670,45 @@ def _to_world(rings, from_crs: str, world) -> list:
         x, y = transformer.transform(ring[:, 0], ring[:, 1])
         out.append(np.column_stack([x, y]))
     return out
+
+
+def _apply_water(spec: str, world, cloud, raster, class_raster, dtm) -> dict:
+    """Fill surveyed water bodies. Same fetch path as the footprints."""
+    import json
+
+    from .topology import water as water_stage
+
+    path = Path(spec)
+    if path.exists():
+        geojson = json.loads(path.read_text())
+        rings = water_stage.polygons(geojson)
+    else:
+        from .data.gis import WATER, fetch_water
+
+        if spec not in WATER:
+            raise ValueError(f"unknown water source {spec!r}; "
+                             f"have {sorted(WATER)} or a path to GeoJSON")
+        layer = WATER[spec]
+        bbox = _extent_in(world, cloud, layer.default_crs)
+        geojson = fetch_water(layer, bbox)
+        rings = _to_world(water_stage.polygons(geojson), layer.default_crs, world)
+
+    # Both paths deliver absolute coordinates in the world CRS; the raster is
+    # in the local frame.
+    rings = [ring - world.origin[:2] for ring in rings]
+    mask = water_stage.rasterise(rings, raster)
+    info = water_stage.apply(class_raster, dtm, mask,
+                             water=terrain_stage.WATER, void=terrain_stage.VOID)
+    info["polygons"] = len(rings)
+    world.notes["water_source"] = spec
+    if info["cells"]:
+        # The seed wants the outline and the level, not the filled cells: a
+        # polygon and a height regenerate a canal, a raster only recolours one.
+        world.notes["water_bodies"] = [
+            {"ring": [[round(float(x), 2), round(float(y), 2)] for x, y in ring],
+             "level_z": info["level_m"]}
+            for ring in rings]
+    return info
 
 
 def _apply_streets(spec: str, world, cloud, raster, class_raster) -> dict:
