@@ -53,6 +53,17 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=1600)
     ap.add_argument("--height", type=int, default=900)
     ap.add_argument("--views", default=",".join(VIEWS))
+    ap.add_argument("--pose", action="append", default=None,
+                    help="an explicit pose in BUNDLE coordinates: "
+                         "name=ex,ey,ez,tx,ty,tz. The fixed VIEWS are offsets "
+                         "from the block centre, which aims a 'street' camera "
+                         "at whatever happens to be there -- in a canal block "
+                         "that is usually a facade 2 m away. Use this to stand "
+                         "somewhere the world actually is. Note the bundle "
+                         "frame is centred on the block, not the seed's local "
+                         "0,0 corner -- read window.lidarworld.world.bounds "
+                         "before writing a pose, or you will stand outside the "
+                         "city looking at the underside of it.")
     ap.add_argument("--chrome", default="/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
                     help="pre-installed browser; the pip package's pinned build "
                          "may not match what this container ships")
@@ -94,10 +105,17 @@ def main() -> int:
         for theme in themes:
             page.evaluate("(t) => window.lidarworld.switchTheme(t)", theme)
             page.wait_for_timeout(1200)
-            for name in args.views.split(","):
-                if name not in VIEWS:
-                    continue
-                eye, target = VIEWS[name]
+            poses = [(name, VIEWS[name], centre) for name in args.views.split(",")
+                     if name in VIEWS]
+            for spec in args.pose or []:
+                name, _, numbers = spec.partition("=")
+                values = [float(v) for v in numbers.split(",")]
+                if len(values) != 6:
+                    raise SystemExit(f"--pose {spec!r}: need name=ex,ey,ez,tx,ty,tz")
+                # Absolute poses are offsets from a zero centre.
+                poses.append((name, (tuple(values[:3]), tuple(values[3:])), [0, 0, 0]))
+
+            for name, (eye, target), origin in poses:
                 # The camera exposes yaw/pitch, not a look-at, so aim it the
                 # same way it aims itself: forward = (cos yaw, sin yaw).
                 page.evaluate("""([eye, target, centre]) => {
@@ -115,7 +133,7 @@ def main() -> int:
                     const dz = (ground(tx, ty) + target[2]) - c.position[2];
                     c.yaw = Math.atan2(dy, dx);
                     c.pitch = Math.atan2(dz, Math.hypot(dx, dy));
-                }""", [list(eye), list(target), centre])
+                }""", [list(eye), list(target), origin])
                 page.wait_for_timeout(700)
                 path = out / f"{theme}-{name}.png"
                 page.screenshot(path=str(path))
