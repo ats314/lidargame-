@@ -86,8 +86,52 @@ def fetch_place(place_id: str, out_dir: str | Path, *, max_tiles: int = 1,
     paths = []
     for tile in tiles[:max_tiles]:
         name = Path(urllib.parse.urlparse(tile["url"]).path).name
-        paths.append(download(tile["url"], out_dir / name, progress=progress))
+        path = download(tile["url"], out_dir / name, progress=progress)
+        write_terms(path, source, place_id=place_id, url=tile["url"])
+        paths.append(path)
     return paths
+
+
+#: Sidecar suffix. A LAS header does not record who published the tile or under
+#: what terms, so a compile of a downloaded file had no way to credit anyone --
+#: `describe()` knew, three function calls earlier, and the answer was dropped
+#: on the floor. This carries it forward to ingest.
+TERMS_SUFFIX = ".source.json"
+
+
+def write_terms(tile_path: Path, source, *, place_id: str = "", url: str = "") -> Path:
+    """Record a downloaded tile's provenance beside it.
+
+    `source` is the *catalogue* Source (`data.catalog`), which is a different
+    class from the ingest-side `types.Source` and carries different fields --
+    a name collision worth knowing about before reaching for `.sensor` here.
+    """
+    path = Path(str(tile_path) + TERMS_SUFFIX)
+    path.write_text(json.dumps({
+        "source_id": source.id,
+        "license": source.license,
+        "attribution": source.attribution,
+        "name": source.name,
+        "commercial": source.commercial,
+        "place": place_id,
+        "url": url,
+    }, indent=1))
+    return path
+
+
+def read_terms(tile_path) -> dict:
+    """The terms recorded beside a tile, or an empty dict if there are none.
+
+    Absent is not permissive: a caller that gets `{}` should say the terms are
+    unrecorded rather than assume they are open.
+    """
+    path = Path(str(tile_path) + TERMS_SUFFIX)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 def resolve_place_tiles(place: dict, place_id: str) -> list[dict]:

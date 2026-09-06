@@ -213,3 +213,27 @@ def test_a_city_costs_a_quarter_of_a_megabyte_at_the_renderer_s_size(block, tmp_
     meta = noctis.export(block, tmp_path / "city.png", grid=256)
     assert meta["extentM"] == pytest.approx(1024.0)
     assert meta["bytes"] < 256 * 1024
+
+
+def test_the_credit_is_an_attribution_not_an_internal_id(block):
+    """Terms travel with the data, or the target credits nobody.
+
+    Seed provenance used to carry only source ids -- "src0" -- so a renderer
+    consuming a real survey put an internal label on screen where the
+    provider's attribution line belonged.
+    """
+    licensed = dict(block, provenance={"sources": [
+        {"id": "src0", "license": "CC0 1.0",
+         "attribution": "AHN / Rijkswaterstaat; tiling by GeoTiles, TU Delft"}]})
+    _, meta = noctis.bake(licensed, grid=32, extent_m=200.0)
+    assert meta["credit"] == (
+        "AHN / Rijkswaterstaat; tiling by GeoTiles, TU Delft (CC0 1.0)")
+
+    # An older seed that carries bare ids still renders something.
+    legacy = dict(block, provenance={"sources": ["usgs_3dep"]})
+    assert noctis.bake(legacy, grid=32, extent_m=200.0)[1]["credit"] == "usgs_3dep"
+
+    # And silence is never mistaken for permission.
+    bare = dict(block, provenance={})
+    assert noctis.bake(bare, grid=32, extent_m=200.0)[1]["credit"] == (
+        "source and terms unrecorded")

@@ -266,8 +266,15 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
                                         simplify)],
          "level_z": body["level_z"], "surface": "inferred"}
         for body in world.notes.get("water_bodies", [])]
+    # Carry each source's terms, not just its id. The ids are internal ("src0")
+    # and mean nothing outside this process, so a target consuming the seed had
+    # no way to credit anyone or state what it was allowed to do -- the licence
+    # simply stopped at the contract boundary. Attribution is other people's
+    # rights, so it travels with the data.
     seed.provenance = {
-        "sources": [s.id for s in world.sources],
+        "sources": [{"id": s.id, "license": s.license,
+                     "attribution": s.attribution, "sensor": s.sensor}
+                    for s in world.sources],
         "crs": world.crs,
         "note": "Lossy by design. Building facades, roof detail and surface "
                 "texture are not described here and are not recoverable from "

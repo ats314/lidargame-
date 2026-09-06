@@ -188,6 +188,27 @@ def _terrain_plane(seed: dict, grid: int, lo: np.ndarray, cell: float):
     return plane, tstep, base, relief
 
 
+def _credit(seed: dict) -> str:
+    """What the renderer should put on screen under the city's name.
+
+    A source's `attribution` is the line its provider asks for; its id is an
+    internal label. Showing the id credits nobody, and an empty credit on a
+    real survey is worse than saying the terms are unrecorded.
+    """
+    lines = []
+    for source in seed.get("provenance", {}).get("sources", []):
+        if isinstance(source, str):        # seeds written before terms travelled
+            lines.append(source)
+            continue
+        name = source.get("attribution") or ""
+        terms = source.get("license") or ""
+        if name and terms:
+            lines.append(f"{name} ({terms})")
+        else:
+            lines.append(name or terms or source.get("id", "unrecorded source"))
+    return " / ".join(dict.fromkeys(lines)) or "source and terms unrecorded"
+
+
 def bake(seed: dict, *, grid: int = 256, cell_m: float = 4.0,
          extent_m: float | None = None) -> tuple:
     """World Seed -> the renderer's four bytes per cell.
@@ -353,8 +374,7 @@ def bake(seed: dict, *, grid: int = 256, cell_m: float = 4.0,
     built = int(building.sum())
     meta = {
         "name": str(seed.get("name", "world")).upper().replace("_", " "),
-        "credit": ", ".join(seed.get("provenance", {}).get("sources", []))
-                  or seed.get("crs", "unknown source"),
+        "credit": _credit(seed),
         "crs": seed.get("crs", ""),
         "grid": grid,
         "cellM": round(cell, 4),
