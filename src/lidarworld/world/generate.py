@@ -228,8 +228,20 @@ def expand(seed: dict, *, tile: float = 0.5, terrain_cell: float = 1.0,
             quads += mesh_stage.add_lattice(builder, roof, lat, len(node_slots) - 1)
 
     for index, tree in enumerate(seed.get("vegetation", [])):
-        pos = np.asarray(tree.get("position", tree.get("center", [0, 0, 0])), dtype=float)
-        radius = float(tree.get("crown_radius", tree.get("radius", 2.5)))
+        # The seed writes `xy` / `base_z` / `crown_r` (see ir/seed.py). Reading
+        # `position` / `crown_radius` here meant every tree fell back to its
+        # default: 1,240 Amsterdam trees all landed on [0, 0, 0] at 2.5 m, and
+        # nothing raised, because `.get` with a default cannot tell a missing
+        # key from an absent tree. The older names stay as fallbacks so a seed
+        # written before this still expands.
+        if "xy" in tree:
+            pos = np.asarray([tree["xy"][0], tree["xy"][1],
+                              tree.get("base_z", 0.0)], dtype=float)
+        else:
+            pos = np.asarray(tree.get("position", tree.get("center", [0, 0, 0])),
+                             dtype=float)
+        radius = float(tree.get("crown_r",
+                                tree.get("crown_radius", tree.get("radius", 2.5))))
         height = float(tree.get("height", 8.0))
         nid = f"tree.{index:04d}"
         world.add(Node(
