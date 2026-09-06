@@ -9,8 +9,8 @@ import pytest
 
 from lidarworld.cli import build_parser
 
-SUBCOMMANDS = ["compile", "generate", "validate", "inspect", "themes", "explain", "roles",
-               "sources", "fetch", "tiles", "adapters"]
+SUBCOMMANDS = ["compile", "generate", "noctis", "validate", "inspect", "themes", "explain",
+               "roles", "sources", "fetch", "tiles", "adapters"]
 
 
 def _subparsers(parser):

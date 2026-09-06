@@ -11,13 +11,15 @@ Built in:
              converters
   ``cityjson`` CityJSON 1.1 with CityGML boundary-surface semantics, for QGIS,
              FME, azul, ninja and the 3D BAG toolchain
+  ``noctis`` a World Seed as a NOCTIS-7 city texture: four bytes per 4 m cell,
+             no triangles at all, for the ASCII renderer in CityBuilder
 
 Writing another (USD, Bevy, a native engine) means one function with this
 signature; see docs/BACKENDS.md.
 """
 from __future__ import annotations
 
-from . import cityjson, gltf, web  # noqa: F401
+from . import cityjson, gltf, noctis, web  # noqa: F401
 
 BACKENDS = {
     "web": {
@@ -35,6 +37,12 @@ BACKENDS = {
         "needs_theme": False,
         "description": "CityJSON 1.1 (CityGML 3.0 encoding) for GIS tooling",
     },
+    "noctis": {
+        "module": noctis,
+        "needs_theme": False,
+        "consumes": "seed",
+        "description": "NOCTIS-7 city texture: a World Seed as an ASCII megacity",
+    },
 }
 
-__all__ = ["BACKENDS", "web", "gltf", "cityjson"]
+__all__ = ["BACKENDS", "web", "gltf", "cityjson", "noctis"]

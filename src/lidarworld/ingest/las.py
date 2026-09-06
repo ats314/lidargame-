@@ -106,11 +106,16 @@ def load_las(path: Path, options: dict) -> IngestResult:
     cloud.meta["reader"] = reader
 
     labelled = float((cloud["semantic"] != 0).mean()) if len(cloud) else 0.0
+    # `lidarworld fetch` records the catalogue's terms beside the tile, because
+    # a LAS header cannot say who published it. Explicit options still win.
+    from ..data.fetch import read_terms
+    terms = read_terms(path)
     source = Source(
-        id=options.get("source_id", path.stem),
+        id=options.get("source_id", terms.get("source_id") or path.stem),
         uri=str(path),
-        license=options.get("license", "unknown -- check the tile's provider"),
-        attribution=options.get("attribution", ""),
+        license=options.get("license", terms.get("license")
+                            or "unknown -- check the tile's provider"),
+        attribution=options.get("attribution", terms.get("attribution", "")),
         sensor=options.get("sensor", "airborne lidar"),
         crs=options.get("crs", crs),
         notes=f"LAS {header.get('version')} pf{header.get('point_format')} via {reader}; "

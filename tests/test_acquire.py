@@ -135,3 +135,31 @@ def test_refetch_is_free(service, tmp_path):
     again = acquire.acquire_layer(denver.LAYERS["parcels"], BBOX, tmp_path)
     assert again == first
     assert len(service.calls) == calls, "cached layer was refetched"
+
+
+def test_a_downloaded_tile_carries_its_terms_to_the_compiler(tmp_path):
+    """A LAS header cannot say who published the tile or under what licence.
+
+    `describe()` knows, at fetch time, and that answer used to be dropped: a
+    compile of a downloaded tile reported "unknown -- check the tile's
+    provider" and the seed credited an internal id. Attribution is other
+    people's rights, so it has to survive the trip to ingest.
+    """
+    from lidarworld.data import describe
+    from lidarworld.data.fetch import read_terms, write_terms
+
+    tile = tmp_path / "25GN1_02.LAZ"
+    tile.write_bytes(b"not really a laz")
+    source = describe("ahn_geotiles")
+    write_terms(tile, source, place_id="amsterdam_grachtengordel",
+                url="https://example.invalid/25GN1_02.LAZ")
+
+    terms = read_terms(tile)
+    assert terms["source_id"] == "ahn_geotiles"
+    assert terms["license"] == source.license
+    assert terms["attribution"] == source.attribution
+    assert terms["place"] == "amsterdam_grachtengordel"
+
+    # Absent is not permissive: a tile with no sidecar reads as unrecorded,
+    # never as open.
+    assert read_terms(tmp_path / "unfetched.LAZ") == {}

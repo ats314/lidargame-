@@ -190,6 +190,30 @@ def _cmd_generate(args) -> int:
     return 0
 
 
+def _cmd_noctis(args) -> int:
+    """Seed -> ASCII megacity. The target with no triangles in it."""
+    from .backends import noctis as noctis_backend
+    from .world import generate
+
+    seed = generate.load(args.seed)
+    meta = noctis_backend.export(
+        seed, args.out, grid=args.grid, cell_m=args.cell,
+        extent_m=args.extent, meta_path=args.meta)
+    print(f"baked {args.seed} -> {meta['path']} ({meta['bytes'] / 1024:.0f} KB)")
+    print(f"  {meta['grid']}x{meta['grid']} cells at {meta['cellM']} m "
+          f"= {meta['extentM']:.0f} m across")
+    print(f"  {meta['buildingsPlaced']} of "
+          f"{meta['seedBuildings']} buildings placed"
+          + (f", {meta['buildingsCropped']} cropped outside the tile"
+             if meta["buildingsCropped"] else ""))
+    print(f"  {meta['buildingCells']:,} building cells, "
+          f"{meta['roadCells']:,} road, {meta['waterCells']:,} water, "
+          f"{meta['parkCells']:,} park")
+    print(f"  tallest {meta['tallestM']} m, relief {meta['relief']} m "
+          f"at {meta['terrStep']:.4f} m per byte")
+    return 0
+
+
 def _cmd_validate(args) -> int:
     """Forward validation: re-scan the reconstruction and score it."""
     import numpy as np
@@ -515,6 +539,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help="surface tile size in metres for generated geometry")
     g.add_argument("--no-textures", action="store_true")
     g.set_defaults(func=_cmd_generate)
+
+    n = sub.add_parser("noctis",
+                       help="World Seed -> NOCTIS-7 city texture (ASCII renderer)")
+    n.add_argument("seed", help="path to a .seed.json")
+    n.add_argument("-o", "--out", default="build/noctis/city.png")
+    n.add_argument("--grid", type=int, default=256,
+                   help="cells per side; the renderer reads this off the image")
+    n.add_argument("--cell", type=float, default=4.0,
+                   help="metres per cell (the renderer's world cell is fixed)")
+    n.add_argument("--extent", type=float, default=None,
+                   help="metres across, overriding --cell; fits the seed's bounds")
+    n.add_argument("--meta", default=None, help="also write the meta as JSON")
+    n.set_defaults(func=_cmd_noctis)
 
     v = sub.add_parser("validate",
                        help="re-simulate a scan against the reconstruction and score it")

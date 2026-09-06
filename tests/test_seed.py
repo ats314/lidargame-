@@ -117,3 +117,81 @@ def test_extract_pulls_buildings_from_programs_not_the_mesh():
     # A rectangle stays a rectangle: five vertices, closed.
     assert len(building["footprint"]) == 5
     assert building["footprint"][0] == building["footprint"][-1]
+
+
+def _seed_from_world_with_a_tree(origin, tree_xy):
+    """A minimal World carrying one instanced tree, at an absolute position.
+
+    The pipeline shifts the cloud to a local origin and then adds that origin
+    back when it writes instance nodes, so a tree node's frame is in absolute
+    CRS metres while `world.bounds` is local. That asymmetry is the trap.
+    """
+    from lidarworld.types import Geometry, Node, World
+
+    world = World(name="frame", crs="EPSG:28992")
+    world.origin = np.asarray(origin, dtype=float)
+    world.bounds = np.array([[0.0, 0.0, 0.0], [400.0, 400.0, 40.0]])
+    world.add(Node(
+        id="tree.0000", role="volume.vegetation.high", semantic="vegetation_high",
+        kind="vegetation", confidence=0.5, stage="segment",
+        geometry=Geometry("instance", {}, {"position": list(tree_xy) + [1.0],
+                                           "size": [3.0, 3.0, 9.0]}),
+        attrs={"crown_radius": 3.0, "canopy_height": 9.0}))
+    return seed_ir.extract(world)
+
+
+def test_every_section_of_a_seed_is_in_one_frame():
+    """The bug this asserts against put a 400 m block's trees 121 km away.
+
+    Buildings, roads, water and `bounds` are local to `origin`; vegetation was
+    written straight from the instance node, which is absolute. Nothing raised
+    -- a seed does not declare a frame per section, so no consumer could tell,
+    and the trees simply vanished off the far edge of every tile baked from it.
+    """
+    origin = [121300.0, 486500.0, 0.0]
+    seed = _seed_from_world_with_a_tree(origin, [121350.0, 486600.0])
+
+    assert seed.origin == origin
+    lo, hi = np.asarray(seed.bounds[0][:2]), np.asarray(seed.bounds[1][:2])
+    xy = np.asarray(seed.vegetation[0]["xy"], dtype=float)
+
+    # Local to `origin`, like everything else in the file.
+    assert xy.tolist() == [50.0, 100.0]
+    assert (xy >= lo).all() and (xy <= hi).all(), (
+        f"tree at {xy.tolist()} is outside bounds {lo.tolist()}..{hi.tolist()}; "
+        "it was written in a different frame from the rest of the seed")
+
+
+def test_the_expander_places_trees_where_the_seed_put_them():
+    """`expand()` read `position`/`crown_radius`; the seed writes `xy`/`crown_r`.
+
+    Every tree therefore fell back to the default and stacked on the origin at
+    2.5 m. `.get` with a default cannot distinguish a missing key from an absent
+    tree, so a whole canopy collapsed to a point without a single error.
+    """
+    from lidarworld.world import generate
+
+    seed = {
+        "seed": "lidarworld/0.1", "name": "trees", "crs": "EPSG:28992",
+        "origin": [0.0, 0.0, 0.0], "bounds": [[0, 0, 0], [40, 40, 20]],
+        "terrain": {"shape": [10, 10], "step_m": 4.0,
+                    "z": [[0.0] * 10 for _ in range(10)]},
+        "buildings": [], "roads": [], "water": [],
+        "vegetation": [
+            {"xy": [8.0, 30.0], "base_z": 0.0, "crown_r": 3.5, "height": 11.0},
+            {"xy": [31.0, 12.0], "base_z": 0.0, "crown_r": 2.0, "height": 7.0},
+        ],
+    }
+    world = generate.expand(seed)
+    trees = [n for n in world.nodes.values()
+             if n.role == "volume.vegetation.high"]
+    assert len(trees) == 2
+
+    placed = sorted([n.attrs["center"][:2] for n in trees])
+    assert placed == [[8.0, 30.0], [31.0, 12.0]]
+    assert sorted(n.attrs["size"][0] for n in trees) == [2.0, 3.5]
+
+    # The failure mode was every tree on top of the origin, so assert they are
+    # apart rather than only that they moved.
+    first, second = (np.asarray(n.attrs["center"][:2]) for n in trees)
+    assert np.linalg.norm(first - second) > 10.0

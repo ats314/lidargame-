@@ -36,7 +36,14 @@ import numpy as np
 
 @dataclass
 class WorldSeed:
-    """Terrain, roads, water, buildings, vegetation, regions. Nothing else."""
+    """Terrain, roads, water, buildings, vegetation, regions. Nothing else.
+
+    **One frame per file.** Every coordinate in here -- `bounds`, building
+    footprints, road centrelines, water rings, tree positions -- is metres
+    local to `origin`, which is the anchor in `crs`. Absolute coordinates are
+    `origin + local`. A consumer that has to ask which section it is holding
+    has already been given a broken file.
+    """
     name: str
     crs: str = ""
     origin: list = field(default_factory=lambda: [0.0, 0.0, 0.0])
@@ -236,9 +243,18 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
         if position is None:
             continue
         size = frame.get("size") or [2.0, 2.0, 6.0]
+        # Instance nodes carry absolute CRS positions -- the pipeline adds
+        # `world.origin` back on when it writes them, so a tool reading the IR
+        # gets real coordinates. Everything else in the seed is local to
+        # `origin`: the bounds, the footprints, the road centrelines, the canal
+        # rings. Writing these through unshifted put the trees of a 400 m block
+        # 121 km away, and nothing raised, because a seed does not declare a
+        # frame per section and no consumer could tell.
+        local = np.asarray(position, dtype=float) - np.asarray(
+            seed.origin, dtype=float)
         seed.vegetation.append({
-            "xy": [round(float(position[0]), 2), round(float(position[1]), 2)],
-            "base_z": round(float(position[2]), 2),
+            "xy": [round(float(local[0]), 2), round(float(local[1]), 2)],
+            "base_z": round(float(local[2]), 2),
             "crown_r": round(float(node.attrs.get("crown_radius", size[0])), 2),
             "height": round(float(node.attrs.get("canopy_height", size[2])), 2),
         })
@@ -250,8 +266,15 @@ def extract(world, *, terrain_step: int = 4, simplify: float = 0.5,
                                         simplify)],
          "level_z": body["level_z"], "surface": "inferred"}
         for body in world.notes.get("water_bodies", [])]
+    # Carry each source's terms, not just its id. The ids are internal ("src0")
+    # and mean nothing outside this process, so a target consuming the seed had
+    # no way to credit anyone or state what it was allowed to do -- the licence
+    # simply stopped at the contract boundary. Attribution is other people's
+    # rights, so it travels with the data.
     seed.provenance = {
-        "sources": [s.id for s in world.sources],
+        "sources": [{"id": s.id, "license": s.license,
+                     "attribution": s.attribution, "sensor": s.sensor}
+                    for s in world.sources],
         "crs": world.crs,
         "note": "Lossy by design. Building facades, roof detail and surface "
                 "texture are not described here and are not recoverable from "

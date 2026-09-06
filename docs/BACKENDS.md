@@ -21,6 +21,20 @@ BACKENDS["usd"] = {
 }
 ```
 
+### Backends that consume a seed instead
+
+`noctis` takes the other input. Its signature is the same shape but the first
+argument is a World Seed dict rather than a `World`:
+
+```python
+def export(seed: dict, out_path, **options) -> dict:
+```
+
+Declare it with `"consumes": "seed"` in `BACKENDS`. Prefer this for any target
+that wants a *place* rather than a *reconstruction* — the seed is two orders of
+magnitude smaller, carries no measured surface, and is the contract the other
+repositories consume (`docs/MASTER.md`).
+
 ## The decision every backend makes
 
 **Does the target understand "theme" as a runtime concept?**
@@ -77,6 +91,13 @@ the traversal — CityJSON and forward validation both do.
 | **Cesium 3D Tiles** | planetary-scale streaming with semantic metadata per feature | node graph → tileset tree; `EXT_structural_metadata` carries roles and confidence |
 | **Godot / Unity / Unreal** | play it | glTF already imports; a native importer buys runtime theme swapping |
 | **Bevy / wgpu** | a GPU-driven runtime over the IR directly | the web bundle format is already close to what a GPU-driven renderer wants |
+| **Godot, from the seed** | the shortest route from a measured place to a store page; the vendored shell in `GODOT-GAME` is already there | GDScript seed loader + scene builder; consumes the seed, not the IR |
+| **React Native entities** | smallest possible fourth target; checks the contract is not secretly 3D-shaped | `entities x systems x time`; see `docs/MASTER.md` |
+
+Built and consuming a seed: **`noctis`** — a World Seed as a NOCTIS-7 city
+texture, four bytes per 4 m cell and no triangles at all. It is the sharpest
+engine-independence test we have, because the other three backends all emit the
+same triangles in different notations.
 
 ## Testing one
 
