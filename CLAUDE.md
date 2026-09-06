@@ -161,6 +161,8 @@ src/lidarworld/
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
 docs/MASTER.md  what the five repositories are together, and why the seam
                 between them is the World Seed and not source
+docs/DEMO.md    a real 400 m Amsterdam block walked in the ASCII renderer, and
+                the four silent defects that building it found
 docs/AMSTERDAM.md
                 the best city available: what compiled, and the two scores
 docs/GENERATED_FACADES.md
@@ -184,6 +186,7 @@ lidarworld tiles . --remote --area=lon,lat,deg # what to DOWNLOAD; 6,505 Denver 
 lidarworld compile data/real --area x,y,size -o build/x \
   --footprints denver --streets denver --theme victorian --theme neon --sir
 python tools/shoot.py --out build/shots        # render it and LOOK at it
+python tools/plan_view.py build/x/city.png    # and look at a bake from above
 
 lidarworld noctis build/x/x.seed.json -o build/x/city.png --meta build/x/city.json
                                               # the same seed as an ASCII megacity

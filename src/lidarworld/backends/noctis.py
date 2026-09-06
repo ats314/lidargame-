@@ -203,7 +203,10 @@ def _credit(seed: dict) -> str:
         name = source.get("attribution") or ""
         terms = source.get("license") or ""
         if name and terms:
-            lines.append(f"{name} ({terms})")
+            # Separator, not brackets: licence strings carry their own
+            # parentheses ("CC0 1.0 (public domain dedication)") and nesting
+            # them reads like a typo on screen.
+            lines.append(f"{name} \u00b7 {terms}")
         else:
             lines.append(name or terms or source.get("id", "unrecorded source"))
     return " / ".join(dict.fromkeys(lines)) or "source and terms unrecorded"

@@ -227,7 +227,7 @@ def test_the_credit_is_an_attribution_not_an_internal_id(block):
          "attribution": "AHN / Rijkswaterstaat; tiling by GeoTiles, TU Delft"}]})
     _, meta = noctis.bake(licensed, grid=32, extent_m=200.0)
     assert meta["credit"] == (
-        "AHN / Rijkswaterstaat; tiling by GeoTiles, TU Delft (CC0 1.0)")
+        "AHN / Rijkswaterstaat; tiling by GeoTiles, TU Delft \u00b7 CC0 1.0")
 
     # An older seed that carries bare ids still renders something.
     legacy = dict(block, provenance={"sources": ["usgs_3dep"]})
