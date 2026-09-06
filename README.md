@@ -50,10 +50,12 @@ That mask is what makes "corner wall" and "wall close to a window" addressable. 
             ▼
       Spatial IR  (.lwir)
             │
-    ┌───────┼────────┬──────────────┐
-    ▼       ▼        ▼              ▼
-   web    glTF   CityJSON     forward validation
- viewer  engines   GIS       re-scan and score it
+    ┌───────┼────────┬──────────────┬─────────────────┐
+    ▼       ▼        ▼              ▼                 ▼
+   web    glTF   CityJSON     forward validation   World Seed (.seed.json)
+ viewer  engines   GIS       re-scan and score it   the cross-repository
+                                                    contract -> ASCII city,
+                                                    Godot, mobile
 ```
 
 Openings are found the way a sensor finds them: glass returns almost nothing at 905 nm, so a window is a **hole in the returns enclosed by solid returns**. It is kept as a hole, not patched over.

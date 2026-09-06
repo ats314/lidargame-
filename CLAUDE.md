@@ -98,6 +98,15 @@ engine. Materialisation happens at the backend boundary, once.
 This is what makes a theme swap a lookup instead of a recompile. If a change
 would violate it, stop and flag it — do not work around it.
 
+## The World Seed is a published interface
+
+Three other repositories consume it (`docs/MASTER.md`): CityBuilder's ASCII
+renderer, GODOT-GAME, react-native-game-engine. Two of them are MIT and one
+carries a third party's copyright, so the seed file is the *only* thing that
+crosses a repository boundary -- never source, never meshes. A breaking change
+to `src/lidarworld/ir/seed.py` is a breaking change to three repositories, and
+`seed: "lidarworld/0.1"` has to start meaning something.
+
 ## Spec authority
 
 `spec/` holds the normative SIR v0.1 schema and round-trip benchmark.
@@ -134,7 +143,9 @@ src/lidarworld/
                 trees.py: street tree placement along building frontages
   topology/     relations, building grouping, street frontage
   themes/       packs, resolver, procedural texture backend
-  backends/     web, glTF, CityJSON  <- the only place materials exist
+  backends/     web, glTF, CityJSON  <- the only place materials exist;
+                noctis.py: a World Seed as a NOCTIS-7 ASCII city texture,
+                four bytes per 4 m cell and no triangles at all
   ir/           .lwir reader/writer, SIR v0.1 exporter,
                 program.py: generative programs + their measured residual,
                 seed.py: the World Seed a generator expands into a place
@@ -148,6 +159,8 @@ src/lidarworld/
                 denver.py: acquisition manifest with independence levels
   validate.py   forward LiDAR simulation, consistency scoring
 spec/           normative SIR v0.1 schema + benchmark (authoritative)
+docs/MASTER.md  what the five repositories are together, and why the seam
+                between them is the World Seed and not source
 docs/AMSTERDAM.md
                 the best city available: what compiled, and the two scores
 docs/GENERATED_FACADES.md
@@ -171,6 +184,9 @@ lidarworld tiles . --remote --area=lon,lat,deg # what to DOWNLOAD; 6,505 Denver 
 lidarworld compile data/real --area x,y,size -o build/x \
   --footprints denver --streets denver --theme victorian --theme neon --sir
 python tools/shoot.py --out build/shots        # render it and LOOK at it
+
+lidarworld noctis build/x/x.seed.json -o build/x/city.png --meta build/x/city.json
+                                              # the same seed as an ASCII megacity
 
 # Helsinki: measure a real block, build a clean one, texture it
 python tools/citygml_join.py --storeys         # register mesh to CityGML, stamp it
