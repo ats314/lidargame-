@@ -43,6 +43,33 @@ LINEAR_MIPMAP_LINEAR = 9987
 REPEAT = 10497
 
 
+def _attach_maps(material: dict, normal_index: int | None,
+                 orm_index: int | None) -> dict:
+    """Hang the non-colour maps off a material.
+
+    glTF fixes the colour spaces by slot, which is why these are separate
+    textures rather than channels of the base colour: `baseColorTexture` is
+    decoded as sRGB, and `normalTexture`, `metallicRoughnessTexture` and
+    `occlusionTexture` are read linearly. Getting that wrong is the classic
+    way a normal map ends up washed out and a roughness map ends up too dark.
+
+    Occlusion and metallic-roughness point at the *same* image, which the spec
+    allows and every engine expects: ambient occlusion in R, roughness in G,
+    metallic in B. One texture fetch, three channels, no packing decision left
+    to the importer.
+    """
+    if normal_index is not None:
+        material["normalTexture"] = {"index": normal_index}
+    if orm_index is not None:
+        material["pbrMetallicRoughness"]["metallicRoughnessTexture"] = {"index": orm_index}
+        material["occlusionTexture"] = {"index": orm_index}
+        # The texture now carries these per texel; a constant factor would
+        # multiply against it and quietly flatten everything back out.
+        material["pbrMetallicRoughness"].pop("roughnessFactor", None)
+        material["pbrMetallicRoughness"]["metallicFactor"] = 1.0
+    return material
+
+
 @dataclass
 class Face:
     """One planar polygon with optional measured appearance.
@@ -63,6 +90,8 @@ class Face:
     kind: str = ""                   # wall | roof | ground, for the fallback colour
     surface_id: str | None = None
     building_id: str | None = None
+    normal_image: str | None = None  # tangent-space normal, linear
+    orm_image: str | None = None     # occlusion / roughness / metallic in R/G/B
 
 
 #: Where a surface has no texture binding, the fallback names the *class*, not a
@@ -216,17 +245,26 @@ def export(faces: list[Face], out_path: str | Path, *,
                      "material": len(materials)}
 
         if image_name is not None:
+            def add_texture(name) -> int | None:
+                if name is None:
+                    return None
+                path = image_root / str(name).replace("\\", "/")
+                data = path.read_bytes()
+                mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+                images.append({"bufferView": add_view(data), "mimeType": mime})
+                textures.append({"source": len(images) - 1, "sampler": 0})
+                return len(textures) - 1
+
             path = image_root / str(image_name).replace("\\", "/")
-            data = path.read_bytes()
-            mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-            images.append({"bufferView": add_view(data), "mimeType": mime})
-            textures.append({"source": len(images) - 1, "sampler": 0})
-            materials.append({
+            first = members[0]
+            materials.append(_attach_maps({
                 "name": path.stem,
                 "pbrMetallicRoughness": {
-                    "baseColorTexture": {"index": len(textures) - 1},
+                    "baseColorTexture": {"index": add_texture(image_name)},
                     "metallicFactor": 0.0, "roughnessFactor": 0.9},
-                "doubleSided": True})
+                "doubleSided": True},
+                add_texture(first.normal_image),
+                add_texture(first.orm_image)))
         else:
             kinds = {f.kind for f in members}
             kind = kinds.pop() if len(kinds) == 1 else ""
@@ -388,7 +426,7 @@ def export_mesh(positions: np.ndarray, uvs: np.ndarray,
     materials: list[dict] = []
     primitives: list[dict] = []
     image_slot: "OrderedDict[str, int]" = OrderedDict()
-    embedded_bytes = 0
+    counted = [0]
 
     for group in groups:
         faces = np.asarray(group.faces, dtype=np.uint32).reshape(-1)
@@ -398,23 +436,32 @@ def export_mesh(positions: np.ndarray, uvs: np.ndarray,
                                     "TEXCOORD_0": uv_accessor},
                      "indices": add_accessor(faces, "SCALAR", 5125),
                      "material": len(materials)}
-        if group.image is not None:
-            key = str(group.image)
+        def add_texture(source) -> int | None:
+            """Embed an image once and return its texture index."""
+            if source is None:
+                return None
+            key = str(source)
             if key not in image_slot:
-                payload = Path(group.image).read_bytes()
+                payload = Path(source).read_bytes()
                 mime = "image/png" if key.lower().endswith(".png") else "image/jpeg"
                 if max_texture_px:
                     payload, mime = _downscale(payload, max_texture_px, mime)
                 images.append({"bufferView": add_view(payload), "mimeType": mime})
                 textures.append({"source": len(images) - 1, "sampler": 0})
                 image_slot[key] = len(textures) - 1
-                embedded_bytes += len(payload)
-            materials.append({
+                counted[0] += len(payload)
+            return image_slot[key]
+
+        if group.image is not None:
+            base = add_texture(group.image)
+            materials.append(_attach_maps({
                 "name": group.material,
                 "pbrMetallicRoughness": {
-                    "baseColorTexture": {"index": image_slot[key]},
+                    "baseColorTexture": {"index": base},
                     "metallicFactor": 0.0, "roughnessFactor": 0.95},
-                "doubleSided": True})
+                "doubleSided": True},
+                add_texture(getattr(group, "normal_image", None)),
+                add_texture(getattr(group, "orm_image", None))))
         else:
             materials.append({
                 "name": group.material or "untextured",
@@ -457,7 +504,7 @@ def export_mesh(positions: np.ndarray, uvs: np.ndarray,
             "triangles": int(sum(len(np.asarray(g.faces).reshape(-1, 3))
                                  for g in groups)),
             "primitives": len(primitives), "textures": len(textures),
-            "texture_bytes": embedded_bytes, "origin": origin.tolist()}
+            "texture_bytes": counted[0], "origin": origin.tolist()}
 
 
 def _downscale(payload: bytes, max_px: int, mime: str) -> tuple[bytes, str]:

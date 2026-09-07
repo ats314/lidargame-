@@ -164,6 +164,61 @@ def add_lattice(builder: MeshBuilder, patch, lattice, node_index: int,
     return len(rects)
 
 
+#: How far behind the wall plane the glass sits. A window is not flush with the
+#: brick; the reveal is what makes an opening read as depth rather than as a
+#: hole cut in cardboard, and it is the cheapest depth cue on a facade because
+#: the surround casts a shadow onto it whenever the sun is off-axis.
+GLAZING_INSET_M = 0.10
+
+
+def add_glazing(builder: MeshBuilder, patch, lattice, node_index: int,
+                *, inset: float = GLAZING_INSET_M) -> int:
+    """Fill each opening with a pane, set back from the wall. Returns the count.
+
+    Until this existed, an opening was a hole and nothing else: `add_lattice`
+    skipped its cells, so a viewer looked straight through the building to the
+    sky behind it. Every theme pack already carries a rule binding
+    `opening.window` to a glass material -- the rule simply had no triangle to
+    resolve against, because openings had never produced geometry.
+
+    The pane carries the opening's own role, not a material. What glass *is*
+    remains a backend decision, exactly as for every other surface.
+    """
+    if not lattice.openings:
+        return 0
+
+    corners, keys, roles = [], [], []
+    for opening in lattice.openings:
+        (u0, v0), (u1, v1) = opening.uv_min, opening.uv_max
+        if u1 <= u0 or v1 <= v0:
+            continue
+        corners.append([[u0, v0], [u1, v0], [u1, v1], [u0, v1]])
+        # OCCUPIED because a pane is real surface -- the flag is geometric,
+        # and provenance lives in the two beside it. OCCLUDED because glass is
+        # never observed by this sensor even when the opening was detected:
+        # the detector infers a window from an *absence* of returns, which is
+        # precisely a surface the LiDAR could not see.
+        keys.append(int(Ctx.OCCUPIED | Ctx.OPENING_BOUNDARY
+                        | Ctx.OCCLUDED | Ctx.SPARSE_EVIDENCE))
+        roles.append(ROLE_INDEX.get(opening.role, ROLE_INDEX["unknown"]))
+
+    if not corners:
+        return 0
+
+    uv = np.asarray(corners, dtype=np.float64)                  # (Q,4,2)
+    world = patch.unproject(uv.reshape(-1, 2)).reshape(-1, 4, 3)
+    world = world - patch.normal * inset
+
+    key_array = np.asarray(keys, dtype=np.uint32)
+    # One call per role so a door and a window do not share a role id. There
+    # are at most three, so the draw-call cost is nil.
+    for role_id in sorted(set(roles)):
+        pick = np.array([r == role_id for r in roles])
+        builder.add_quads(world[pick], patch.normal, uv[pick], key_array[pick],
+                          role_id, node_index)
+    return len(corners)
+
+
 def corner_heights(dtm: np.ndarray) -> np.ndarray:
     """Cell-centred heights -> (nx+1, ny+1) corner heights.
 

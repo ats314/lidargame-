@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>lidarworld walk</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="walk.css">
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/"
+} }
+</script>
+<div id="stage"></div>
+<div id="hud">
+  <div id="status">loading…</div>
+  <label>sun <input id="sun" type="range" min="3" max="87" value="34"></label>
+  <label>bearing <input id="bearing" type="range" min="0" max="360" value="215"></label>
+  <label>exposure <input id="exposure" type="range" min="0.2" max="2.5" step="0.05" value="1"></label>
+  <div id="hint">click to look · <b>WASD</b> walk · <b>shift</b> run · <b>space</b> up · <b>esc</b> release</div>
+</div>
+<script type="module" src="walk.js"></script>

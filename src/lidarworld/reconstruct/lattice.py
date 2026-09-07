@@ -19,6 +19,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+import zlib
+
 import numpy as np
 
 from ..roles.taxonomy import Ctx
@@ -41,6 +43,11 @@ class Opening:
     height: float
     sill_height: float               # metres above the patch's lowest edge
     confidence: float
+    #: True when nothing was measured here and the opening was invented. The
+    #: detector never sets it; `fenestrate` always does. Downstream this is the
+    #: difference between "the returns show a hole" and "a wall of this size
+    #: has windows somewhere".
+    generated: bool = False
 
 
 @dataclass
@@ -453,6 +460,29 @@ def _door_notches(solid: np.ndarray, cell: float, *, min_width: float, max_width
     return notches
 
 
+def stamp_variant(lattice: TileLattice, key) -> int:
+    """Mark every cell of one surface with which building it belongs to.
+
+    Two bits, meaning nothing but "these buildings are not the same one". A
+    theme binds a different material to each, so a terrace stops resolving to
+    one continuous brick wall -- which is most of what makes a generated
+    street look generated.
+
+    crc32 rather than hash(): hash() is salted per interpreter for strings, so
+    a building keyed by its register id would land in a different variant on
+    every run and the same seed would not rebuild the same street.
+    """
+    variant = zlib.crc32(str(key).encode()) & 0b11
+    bits = 0
+    if variant & 0b01:
+        bits |= int(Ctx.VARIANT_LOW)
+    if variant & 0b10:
+        bits |= int(Ctx.VARIANT_HIGH)
+    if bits:
+        lattice.context |= np.uint32(bits)
+    return variant
+
+
 def build_solid(patch, width: float, height: float, *, cell: float = 0.25,
                 ground_z: float | None = None, interior_depth: int = 3) -> TileLattice:
     """Lattice for a surface that was synthesised rather than measured.
@@ -474,8 +504,18 @@ def build_solid(patch, width: float, height: float, *, cell: float = 0.25,
     ctx[-1, :] |= Ctx.EDGE_U_MAX
     ctx[:, 0] |= Ctx.EDGE_V_MIN | Ctx.BOTTOM
     ctx[:, -1] |= Ctx.EDGE_V_MAX | Ctx.TOP
-    ctx[0, :] |= Ctx.CORNER_CONVEX
-    ctx[-1, :] |= Ctx.CORNER_CONVEX
+    # A wall's ends are only corners if the footprint actually turns there.
+    # Flagging both ends unconditionally put a quoin at every vertex of every
+    # footprint -- including the collinear ones a register carries from
+    # digitising -- so a straight brick frontage came out striped with stone
+    # every few metres. `walls_from_footprint` measures the turn and says.
+    ends = getattr(patch, "attrs", None) or {}
+    for index, key in ((0, "corner_u_min"), (-1, "corner_u_max")):
+        kind = ends.get(key, "convex")     # measured surfaces do not set it
+        if kind == "convex":
+            ctx[index, :] |= Ctx.CORNER_CONVEX
+        elif kind == "concave":
+            ctx[index, :] |= Ctx.CORNER_CONCAVE
 
     depth = distance_to_false(np.pad(solid, 1))[1:-1, 1:-1]
     ctx[depth >= interior_depth] |= Ctx.INTERIOR

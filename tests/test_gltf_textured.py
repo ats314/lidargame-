@@ -275,3 +275,56 @@ def test_mesh_export_flips_v_for_gltf(tmp_path):
     values = np.frombuffer(binary, dtype=np.float32, count=spec["count"] * 2,
                            offset=view["byteOffset"]).reshape(-1, 2)
     assert values[0].tolist() == [0.0, 1.0]
+
+
+def test_measured_faces_carry_their_normal_and_orm_maps(tmp_path):
+    """The measured-appearance path must be able to ship relief too.
+
+    Photogrammetric colour is only half of an appearance. Where a producer has
+    a normal and an ORM map for a surface -- generated, matched from a library,
+    or derived -- the writer has to place them in the slots glTF reserves for
+    them, and must not fold them into the base colour.
+    """
+    from lidarworld.themes.png import write as write_png
+
+    for name, channels in (("albedo", 3), ("normal", 3), ("orm", 3)):
+        write_png(tmp_path / f"{name}.png",
+                  np.full((4, 4, channels), 128, dtype=np.uint8))
+
+    ring = np.array([[0, 0, 0], [4, 0, 0], [4, 0, 3], [0, 0, 3]], dtype=float)
+    uv = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=float)
+    face = Face(ring=ring, uv=uv, image="albedo.png", kind="wall",
+                normal_image="normal.png", orm_image="orm.png")
+
+    out = tmp_path / "wall.glb"
+    export([face], out, image_root=tmp_path)
+    document, _ = read_back(out)
+
+    material = document["materials"][0]
+    pbr = material["pbrMetallicRoughness"]
+    assert "normalTexture" in material
+    assert "metallicRoughnessTexture" in pbr
+    assert material["occlusionTexture"]["index"] == pbr["metallicRoughnessTexture"]["index"]
+    assert len({material["normalTexture"]["index"],
+                pbr["metallicRoughnessTexture"]["index"],
+                pbr["baseColorTexture"]["index"]}) == 3
+    assert len(document["images"]) == 3, "each map must be embedded once"
+
+
+def test_a_face_without_extra_maps_is_unchanged(tmp_path):
+    """The maps are optional; the common path must not require them."""
+    from lidarworld.themes.png import write as write_png
+
+    write_png(tmp_path / "albedo.png", np.full((4, 4, 3), 128, dtype=np.uint8))
+    ring = np.array([[0, 0, 0], [4, 0, 0], [4, 0, 3], [0, 0, 3]], dtype=float)
+    uv = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=float)
+
+    export([Face(ring=ring, uv=uv, image="albedo.png", kind="wall")],
+           tmp_path / "plain.glb", image_root=tmp_path)
+    document, _ = read_back(tmp_path / "plain.glb")
+
+    material = document["materials"][0]
+    assert "normalTexture" not in material
+    assert "metallicRoughnessTexture" not in material["pbrMetallicRoughness"]
+    assert material["pbrMetallicRoughness"]["roughnessFactor"] == 0.9
+    assert len(document["images"]) == 1

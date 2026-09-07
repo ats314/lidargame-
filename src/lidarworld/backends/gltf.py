@@ -137,6 +137,7 @@ def export(world: World, pack: ThemePack, out_dir: str | Path, *,
 
     images, textures, materials = [], [], []
     for i, spec in enumerate(specs):
+        material_maps: dict[str, int] = {}
         pbr = {
             "baseColorFactor": [*spec.base_color, spec.opacity],
             "metallicFactor": float(spec.metallic),
@@ -144,12 +145,30 @@ def export(world: World, pack: ThemePack, out_dir: str | Path, *,
         }
         if bake_textures and spec.kind == "procedural":
             maps = procedural.bake(spec)
-            rel = f"tex/{spec.id}_albedo.png"
-            write_png(out_dir / rel, maps["albedo"])
-            images.append({"uri": rel})
-            textures.append({"source": len(images) - 1, "sampler": 0})
-            pbr["baseColorTexture"] = {"index": len(textures) - 1}
+
+            def add_texture(channel: str) -> int | None:
+                if channel not in maps:
+                    return None
+                rel = f"tex/{spec.id}_{channel}.png"
+                write_png(out_dir / rel, maps[channel])
+                images.append({"uri": rel})
+                textures.append({"source": len(images) - 1, "sampler": 0})
+                return len(textures) - 1
+
+            pbr["baseColorTexture"] = {"index": add_texture("albedo")}
             pbr["baseColorFactor"] = [1, 1, 1, spec.opacity]
+
+            # The generator has always produced relief and roughness alongside
+            # the colour; until now only the colour was written, so every
+            # surface arrived in the engine as flat paint under whatever
+            # lighting the viewer happened to have. A brick wall with no
+            # normal map is a photograph of a brick wall.
+            normal_index = add_texture("normal")
+            orm_index = add_texture("orm")
+            if normal_index is not None:
+                material_maps["normal"] = normal_index
+            if orm_index is not None:
+                material_maps["orm"] = orm_index
         material = {
             "name": spec.id,
             "pbrMetallicRoughness": pbr,
@@ -158,6 +177,16 @@ def export(world: World, pack: ThemePack, out_dir: str | Path, *,
                        "era": list(spec.era), "tags": list(spec.tags),
                        "worldScaleMetres": spec.scale_m},
         }
+        if "normal" in material_maps:
+            material["normalTexture"] = {"index": material_maps["normal"]}
+        if "orm" in material_maps:
+            # Occlusion in R, roughness in G, metallic in B -- one image, and
+            # the factors go to 1 so the texture drives them rather than being
+            # multiplied down by the spec's constants.
+            pbr["metallicRoughnessTexture"] = {"index": material_maps["orm"]}
+            pbr["metallicFactor"] = 1.0
+            pbr["roughnessFactor"] = 1.0
+            material["occlusionTexture"] = {"index": material_maps["orm"]}
         if any(spec.emissive):
             material["emissiveFactor"] = list(spec.emissive)
         if spec.opacity < 1.0:

@@ -7,6 +7,8 @@ address into bytes on disk.
 from __future__ import annotations
 
 import json
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -49,25 +51,63 @@ def resolve_tiles(bbox_wgs84, *, dataset: str = "Lidar Point Cloud (LPC)",
     return sorted(tiles, key=lambda t: t["published"], reverse=True)
 
 
-def download(url: str, dest: Path, *, chunk: int = 1 << 20, progress=None) -> Path:
+#: A tile is hundreds of megabytes from a public host with no SLA, so a reset
+#: part-way through is ordinary rather than exceptional. Four attempts at
+#: 2/4/8 s covers the transient case without turning a genuine 404 into a
+#: two-minute wait.
+DOWNLOAD_ATTEMPTS = 4
+
+
+def download(url: str, dest: Path, *, chunk: int = 1 << 20, progress=None,
+             attempts: int = DOWNLOAD_ATTEMPTS, sleep=time.sleep) -> Path:
+    """Fetch `url` to `dest`, retrying a dropped connection.
+
+    Without this a single `Connection reset by peer` fails the whole command --
+    and it took down a viewer deploy on `main` for a docs-only commit, because
+    the deploy fetches a real tile. The retry is on the transport, not on the
+    result: an HTTP error is the server answering, so it is raised immediately
+    rather than hammered.
+
+    The partial file is discarded between attempts. Resuming with a Range
+    request would be better for a 300 MB tile, but only if the server honours
+    it; starting over is at least always correct.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and dest.stat().st_size > 0:
         return dest
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     partial = dest.with_suffix(dest.suffix + ".part")
-    with urllib.request.urlopen(request, timeout=600) as response, open(partial, "wb") as out:
-        total = int(response.headers.get("Content-Length") or 0)
-        done = 0
-        while True:
-            block = response.read(chunk)
-            if not block:
-                break
-            out.write(block)
-            done += len(block)
-            if progress:
-                progress(done, total)
-    partial.rename(dest)
-    return dest
+
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=600) as response, \
+                    open(partial, "wb") as out:
+                total = int(response.headers.get("Content-Length") or 0)
+                done = 0
+                while True:
+                    block = response.read(chunk)
+                    if not block:
+                        break
+                    out.write(block)
+                    done += len(block)
+                    if progress:
+                        progress(done, total)
+                if total and done < total:
+                    raise OSError(
+                        f"truncated: {done} of {total} bytes from {url}")
+        except urllib.error.HTTPError:
+            # The server answered. Retrying a 404 or a 403 just repeats it.
+            partial.unlink(missing_ok=True)
+            raise
+        except (urllib.error.URLError, OSError, TimeoutError):
+            partial.unlink(missing_ok=True)
+            if attempt == max(1, attempts):
+                raise
+            sleep(2 ** attempt)
+            continue
+        partial.rename(dest)
+        return dest
+    raise AssertionError("unreachable")
 
 
 def fetch_place(place_id: str, out_dir: str | Path, *, max_tiles: int = 1,
